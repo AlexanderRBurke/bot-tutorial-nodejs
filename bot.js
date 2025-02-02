@@ -6,8 +6,21 @@ var botID = "";
 const phrases = {
   0: "RoN?",
   "can't": "Riiiiiiiight.",
+  "Can't": "Riiiiiiiight.",
   "time": "Time is a tool you can put on the wall, Or wear it on your wrist.",
   "where": "I know Where mine are.",
+  "Where": "I know Where mine are.",
+  "mustering": "mustering mustering mustering".toUpperCase(),
+  "hot dog": "",
+  "Alex": "alex, I love you",
+  "Jared": "jared, I don't love you",
+  "Cock": "jo mama",
+  "power": "AHHHHHHHHHHHHHHHHHHHHHHH!!!!!!!!!!!!!!",
+  "turtle": "",
+  "orange": "",
+  "met": "",
+  "Millers": "",
+  "millers": "",
   1: "Yes.",
   2: "No.",
   3: "Maybe.",
@@ -132,7 +145,7 @@ function respond() {
     postMessage(request.text.match(regex));
     this.res.end();
   } else {
-    console.log("don't care");
+    console.log("don't care about: " + request.text);
     this.res.writeHead(200);
     this.res.end();
   }
@@ -160,6 +173,47 @@ function postMessage(matches) {
     "bot_id": botID,
     "text": botResponse
   };
+
+  if (matches[0] == "hot dog") {
+    body["attachments"] = [
+      {
+        "type": "image",
+        "url": "https://i.groupme.com/498x280.gif.36a10d3af2ff42498482b2ea3967adad"
+      }
+    ];
+  } else if (matches[0] == "turtle") {
+    body["attachments"] = [
+      {
+        "type": "image",
+        "url": "https://i.groupme.com/1179x2556.jpeg.962921d8226b4e17bfbaf4caac90922c"
+      }
+    ];
+  } else if (matches[0] == "orange") {
+    body["attachments"] = [
+      {
+        "type": "image",
+        "url": "https://i.groupme.com/1080x1350.jpeg.de1be9ae1fab402b97d15ff0dd323630"
+      }
+    ];
+  }
+  else if (matches[0] == "met") {
+    body["attachments"] = [
+      {
+        "type": "image",
+        "url": "https://i.groupme.com/164x240.jpeg.f032055c65a344278ea3f5268c4b353c"
+      }
+    ];
+  }
+  else if (matches[0] == "Millers" || matches[0] == "millers") {
+    body["attachments"] = [
+      {
+        "type": "location",
+        "lng": "-73.282608",
+        "lat": "40.839119",
+        "name": "Miller's Ale House"
+      }
+    ];
+  }
 
   console.log('sending ' + botResponse + ' to ' + botID);
 
