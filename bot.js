@@ -3,13 +3,11 @@ var cool = require('cool-ascii-faces');
 
 var botID = "";
 
-const phrases = {
+let phrases = {
   0: "RoN?",
-  "can't": "Riiiiiiiight.",
   "Can't": "Riiiiiiiight.",
   "time": "Time is a tool you can put on the wall, Or wear it on your wrist.",
   "where": "I know Where mine are.",
-  "Where": "I know Where mine are.",
   "mustering": "mustering mustering mustering".toUpperCase(),
   "hot dog": "",
   "Alex": "alex, I love you",
@@ -19,8 +17,7 @@ const phrases = {
   "turtle": "",
   "orange": "",
   "met": "",
-  "Millers": "",
-  "millers": "",
+  "millers": "You mean the place that invented the Blue Moon pitcher?",
   1: "Yes.",
   2: "No.",
   3: "Maybe.",
@@ -127,20 +124,27 @@ const phrases = {
   144: "Have you fixed your little cock yet?"
 };
 
+const newPhrases = Object.fromEntries(
+  Object.entries(phrases).map(([k, v]) => [k.toLowerCase(), v])
+);
+
+phrases = newPhrases;
+
 // Create the regex dynamically:
 const regexString = Object.keys(phrases).map(key => {
+  const lowerKey = key.toLowerCase(); // Convert key to lowercase
   // Escape special regex characters in the keys
-  const escapedKey = key.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&');  // escape regex special chars
+  const escapedKey = lowerKey.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&');  // escape regex special chars
   return escapedKey;
 }).join('|');
 
-const regex = new RegExp(`\\b(${regexString})\\b`, 'g');
+const regex = new RegExp(`\\b(${regexString})\\b`, 'gi');
 
 function respond() {
   var request = JSON.parse(this.req.chunks[0]),
     botRegex = regex;
 
-  if (request.text && botRegex.test(request.text)) {
+  if (request.name != "RoN Bot" && request.text && botRegex.test(request.text)) {
     this.res.writeHead(200);
     postMessage(request.text.match(regex));
     this.res.end();
@@ -158,7 +162,7 @@ function postMessage(matches) {
     botResponse = cool();
   } else {
     for (let index = 0; index < matches.length; index++) {
-      const element = phrases[matches[index]];
+      const element = phrases[matches[index].toLowerCase()];
       botResponse += element + " ";
     }
   }
@@ -204,7 +208,7 @@ function postMessage(matches) {
       }
     ];
   }
-  else if (matches[0] == "Millers" || matches[0] == "millers") {
+  else if (matches[0] == "millers") {
     body["attachments"] = [
       {
         "type": "location",
