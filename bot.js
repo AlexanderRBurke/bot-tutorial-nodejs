@@ -3,6 +3,9 @@ var cool = require('cool-ascii-faces');
 
 var botID = "";
 
+var fs = require("fs");
+var beeString = fs.readFileSync("./beeMovie.txt").toString('utf-8');
+
 let phrases = {
   0: "RoN?",
   "Can't": "Riiiiiiiight.",
@@ -18,6 +21,7 @@ let phrases = {
   "orange": "",
   "met": "",
   "millers": "You mean the place that invented the Blue Moon pitcher?",
+  "internet": "Thank you Al Gore.",
   1: "Yes.",
   2: "No.",
   3: "Maybe.",
@@ -121,7 +125,11 @@ let phrases = {
   101: "I am down, with a squad.",
   111: "Shave his belly with a rusty razor.",
   112: "Put him in the brig with the captain's daughter.",
-  144: "Have you fixed your little cock yet?"
+  123: "저는 오늘 한국어 수업이 있어요.",
+  144: "Have you fixed your little cock yet?",
+  777: "PLUG THE LEAK",
+  999: beeString.substring(0, 988),
+  1738: "https://www.youtube.com/watch?v=1AM_VSfudig"
 };
 
 const newPhrases = Object.fromEntries(
@@ -178,21 +186,21 @@ function postMessage(matches) {
     "text": botResponse
   };
 
-  if (matches[0] == "hot dog") {
+  if (matches[0].toLowerCase() == "hot dog") {
     body["attachments"] = [
       {
         "type": "image",
         "url": "https://i.groupme.com/498x280.gif.36a10d3af2ff42498482b2ea3967adad"
       }
     ];
-  } else if (matches[0] == "turtle") {
+  } else if (matches[0].toLowerCase() == "turtle") {
     body["attachments"] = [
       {
         "type": "image",
         "url": "https://i.groupme.com/1179x2556.jpeg.962921d8226b4e17bfbaf4caac90922c"
       }
     ];
-  } else if (matches[0] == "orange") {
+  } else if (matches[0].toLowerCase() == "orange") {
     body["attachments"] = [
       {
         "type": "image",
@@ -200,7 +208,7 @@ function postMessage(matches) {
       }
     ];
   }
-  else if (matches[0] == "met") {
+  else if (matches[0].toLowerCase() == "met") {
     body["attachments"] = [
       {
         "type": "image",
