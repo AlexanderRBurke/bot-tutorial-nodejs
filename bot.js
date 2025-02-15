@@ -1,27 +1,29 @@
-var HTTPS = require('https');
-var cool = require('cool-ascii-faces');
+var HTTPS = require("https");
+var cool = require("cool-ascii-faces");
 
 var botID = "";
 
 var fs = require("fs");
-var beeString = fs.readFileSync("./beeMovie.txt").toString('utf-8');
+var beeString = fs.readFileSync("./beeMovie.txt").toString("utf-8");
+
+function getRandomInt(max) {
+  return Math.floor(Math.random() * max);
+}
 
 let phrases = {
   0: "RoN?",
   "Can't": "Riiiiiiiight.",
-  "time": "Time is a tool you can put on the wall, Or wear it on your wrist.",
-  "where": "I know Where mine are.",
-  "mustering": "mustering mustering mustering".toUpperCase(),
+  time: "Time is a tool you can put on the wall, Or wear it on your wrist.",
+  where: "I know Where mine are.",
+  mustering: "mustering mustering mustering".toUpperCase(),
   "hot dog": "",
-  "Alex": "alex, I love you",
-  "Jared": "jared, I don't love you",
-  "Cock": "jo mama",
-  "power": "AHHHHHHHHHHHHHHHHHHHHHHH!!!!!!!!!!!!!!",
-  "turtle": "",
-  "orange": "",
-  "met": "",
-  "millers": "You mean the place that invented the Blue Moon pitcher?",
-  "internet": "Thank you Al Gore.",
+  Cock: "jo mama",
+  power: "AHHHHHHHHHHHHHHHHHHHHHHH!!!!!!!!!!!!!!",
+  turtle: "",
+  orange: "",
+  met: "",
+  millers: "You mean the place that invented the Blue Moon pitcher?",
+  internet: "Thank you Al Gore.",
   1: "Yes.",
   2: "No.",
   3: "Maybe.",
@@ -129,7 +131,7 @@ let phrases = {
   144: "Have you fixed your little cock yet?",
   777: "PLUG THE LEAK",
   999: beeString.substring(0, 988),
-  1738: "https://www.youtube.com/watch?v=1AM_VSfudig"
+  1738: "https://www.youtube.com/watch?v=1AM_VSfudig",
 };
 
 const newPhrases = Object.fromEntries(
@@ -139,20 +141,27 @@ const newPhrases = Object.fromEntries(
 phrases = newPhrases;
 
 // Create the regex dynamically:
-const regexString = Object.keys(phrases).map(key => {
-  const lowerKey = key.toLowerCase(); // Convert key to lowercase
-  // Escape special regex characters in the keys
-  const escapedKey = lowerKey.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&');  // escape regex special chars
-  return escapedKey;
-}).join('|');
+const regexString = Object.keys(phrases)
+  .map((key) => {
+    const lowerKey = key.toLowerCase(); // Convert key to lowercase
+    // Escape special regex characters in the keys
+    const escapedKey = lowerKey.replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&"); // escape regex special chars
+    return escapedKey;
+  })
+  .join("|");
 
-const regex = new RegExp(`\\b(${regexString})\\b`, 'gi');
+const regex = new RegExp(`\\b(${regexString})\\b`, "gi");
 
 function respond() {
   var request = JSON.parse(this.req.chunks[0]),
     botRegex = regex;
 
-  if (request.name != "RoN Bot" && request.text && botRegex.test(request.text)) {
+  if (
+    request.name != "RoN Bot" &&
+    request.text &&
+    botRegex.test(request.text) &&
+    getRandomInt(2) == 1
+  ) {
     this.res.writeHead(200);
     postMessage(request.text.match(regex));
     this.res.end();
@@ -176,75 +185,72 @@ function postMessage(matches) {
   }
 
   options = {
-    hostname: 'api.groupme.com',
-    path: '/v3/bots/post',
-    method: 'POST'
+    hostname: "api.groupme.com",
+    path: "/v3/bots/post",
+    method: "POST",
   };
 
   body = {
-    "bot_id": botID,
-    "text": botResponse
+    bot_id: botID,
+    text: botResponse,
   };
 
   if (matches[0].toLowerCase() == "hot dog") {
     body["attachments"] = [
       {
-        "type": "image",
-        "url": "https://i.groupme.com/498x280.gif.36a10d3af2ff42498482b2ea3967adad"
-      }
+        type: "image",
+        url: "https://i.groupme.com/498x280.gif.36a10d3af2ff42498482b2ea3967adad",
+      },
     ];
   } else if (matches[0].toLowerCase() == "turtle") {
     body["attachments"] = [
       {
-        "type": "image",
-        "url": "https://i.groupme.com/1179x2556.jpeg.962921d8226b4e17bfbaf4caac90922c"
-      }
+        type: "image",
+        url: "https://i.groupme.com/1179x2556.jpeg.962921d8226b4e17bfbaf4caac90922c",
+      },
     ];
   } else if (matches[0].toLowerCase() == "orange") {
     body["attachments"] = [
       {
-        "type": "image",
-        "url": "https://i.groupme.com/1080x1350.jpeg.de1be9ae1fab402b97d15ff0dd323630"
-      }
+        type: "image",
+        url: "https://i.groupme.com/1080x1350.jpeg.de1be9ae1fab402b97d15ff0dd323630",
+      },
     ];
-  }
-  else if (matches[0].toLowerCase() == "met") {
+  } else if (matches[0].toLowerCase() == "met") {
     body["attachments"] = [
       {
-        "type": "image",
-        "url": "https://i.groupme.com/164x240.jpeg.f032055c65a344278ea3f5268c4b353c"
-      }
+        type: "image",
+        url: "https://i.groupme.com/164x240.jpeg.f032055c65a344278ea3f5268c4b353c",
+      },
     ];
-  }
-  else if (matches[0] == "millers") {
+  } else if (matches[0] == "millers") {
     body["attachments"] = [
       {
-        "type": "location",
-        "lng": "-73.282608",
-        "lat": "40.839119",
-        "name": "Miller's Ale House"
-      }
+        type: "location",
+        lng: "-73.282608",
+        lat: "40.839119",
+        name: "Miller's Ale House",
+      },
     ];
   }
 
-  console.log('sending ' + botResponse + ' to ' + botID);
+  console.log("sending " + botResponse + " to " + botID);
 
   botReq = HTTPS.request(options, function (res) {
     if (res.statusCode == 202) {
       //neat
     } else {
-      console.log('rejecting bad status code ' + res.statusCode);
+      console.log("rejecting bad status code " + res.statusCode);
     }
   });
 
-  botReq.on('error', function (err) {
-    console.log('error posting message ' + JSON.stringify(err));
+  botReq.on("error", function (err) {
+    console.log("error posting message " + JSON.stringify(err));
   });
-  botReq.on('timeout', function (err) {
-    console.log('timeout posting message ' + JSON.stringify(err));
+  botReq.on("timeout", function (err) {
+    console.log("timeout posting message " + JSON.stringify(err));
   });
   botReq.end(JSON.stringify(body));
 }
-
 
 exports.respond = respond;
