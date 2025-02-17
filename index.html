@@ -2,6 +2,11 @@
 <html>
   <head>
     <title>Bot Tester</title>
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   </head>
   <body>
     <h1>Test Your Bot</h1>
@@ -15,10 +20,14 @@
       <button type="submit">Send</button>
     </form>
     <div id="botResponse"></div>
+    <div id="imageDiv"></div>
+    <div id="mapDiv" style="height: 400px; width: 600px"></div>
 
     <script>
       const form = document.getElementById("messageForm");
       const responseDiv = document.getElementById("botResponse");
+      const imageDiv = document.getElementById("imageDiv");
+      const mapDiv = document.getElementById("mapDiv"); // Get the map container element
 
       form.addEventListener("submit", (e) => {
         e.preventDefault();
@@ -48,8 +57,36 @@
         })
           .then((response) => response.text()) // Get the text response
           .then((data) => {
-            console.error("Data:", data);
-            responseDiv.textContent = data; // Display it
+            var parsedData = JSON.parse(data);
+            console.error("parsedData:", parsedData);
+            responseDiv.textContent = parsedData.text; // Display it
+
+            var attachments = parsedData.attachments[0];
+            var type = attachments?.type;
+
+            if (type == "location") {
+              const lat = attachments.lat;
+              const lng = attachments.lng;
+              // Initialize the map (using mapDiv):
+              const map = L.map(mapDiv).setView([lat, lng], 13);
+
+              L.tileLayer(
+                "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+                {
+                  attribution:
+                    'Map data &copy; <a href="https://www.openstreetmap.org/">OpenStreetMap</a> contributors',
+                  maxZoom: 18,
+                }
+              ).addTo(map);
+
+              L.marker([lat, lng]).addTo(map).bindPopup("Location");
+            } else if (type == "image") {
+              const img = document.createElement("img");
+              img.src = attachments.url;
+              img.alt = "Bot Image";
+              imageDiv.appendChild(img); // Add to the new image div
+            }
+
             document.getElementById("messageInput").value = ""; // Clear input
           })
           .catch((error) => {
