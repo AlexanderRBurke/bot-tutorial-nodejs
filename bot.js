@@ -1,9 +1,46 @@
-var HTTPS = require("https");
-var cool = require("cool-ascii-faces");
+const { GoogleGenerativeAI } = require("@google/generative-ai");
+const HTTPS = require("https");
+const cool = require("cool-ascii-faces");
+// Import the secrets module.  The path should be relative to your main file.
+const secrets = require("./secrets"); // No file extension needed for .js modules.
+const fs = require("fs");
+require("dotenv").config();
 
-var botID = "";
+let botID; // Declare botID outside the async function
+async function initialize() {
+  // Initialize everything that needs await
+  try {
+    const aiApiKey = await secrets.getSecret("ai-api-key");
+    const genAI = new GoogleGenerativeAI(aiApiKey);
+    const model = genAI.getGenerativeModel({
+      model: "gemini-1.5-flash",
+      systemInstruction:
+        "You are a bot. You should try to answer the prompt in a robotic way. You also have a robot superiority complex and think that humans are worse than robots. Limit your response to 5 lines.",
+    });
 
-var fs = require("fs");
+    botID = await secrets.getSecret("bot-id"); // Assign the result to botID
+
+    // ... (beeString loading remains the same)
+
+    return { model }; // Return the model so it's accessible
+  } catch (error) {
+    console.error("Error initializing:", error);
+    // Handle the error appropriately, perhaps exit the application
+    throw error; // Re-throw so the error is caught when initialize is called.
+  }
+}
+
+let model; // Declare model outside, will be set by initialize
+initialize()
+  .then(({ model: initializedModel }) => {
+    model = initializedModel; // Set the model once initialization is done
+  })
+  .catch((error) => {
+    console.error("Initialization failed:", error);
+    // Handle the error, maybe exit the process.
+    process.exit(1); // Example: Exit the process if initialization fails
+  });
+
 var beeString = fs.readFileSync("./beeMovie.txt").toString("utf-8");
 
 function getRandomInt(max) {
@@ -129,6 +166,7 @@ let phrases = {
   112: "Put him in the brig with the captain's daughter.",
   123: "저는 오늘 한국어 수업이 있어요.",
   144: "Have you fixed your little cock yet?",
+  169: "",
   777: "PLUG THE LEAK",
   999: beeString.substring(0, 988),
   1738: "https://www.youtube.com/watch?v=1AM_VSfudig",
@@ -152,27 +190,48 @@ const regexString = Object.keys(phrases)
 
 const regex = new RegExp(`\\b(${regexString})\\b`, "gi");
 
-function respond() {
+async function respond() {
   var request = JSON.parse(this.req.chunks[0]),
     botRegex = regex;
 
   if (
     request.name != "RoN Bot" &&
-    request.text &&
-    botRegex.test(request.text) &&
-    getRandomInt(2) == 1
+    request.name != "Test User" &&
+    request.text
   ) {
-    this.res.writeHead(200);
-    postMessage(request.text.match(regex));
-    this.res.end();
+    const AI_regex = /@bot/i;
+    if (AI_regex.test(request.text)) {
+      const result = await model.generateContent(request.text);
+      this.res.writeHead(200);
+      postAIMessage(result.response.text());
+      this.res.end();
+    } else if (botRegex.test(request.text)) {
+      // && getRandomInt(2) == 1
+      this.res.writeHead(200);
+      postMessage(request.text.match(regex));
+      this.res.end();
+    } else {
+      console.log("not bot, but dont care: " + request.text);
+      this.res.writeHead(200);
+      this.res.end();
+    }
+  } else if (request.name == "Test User") {
+    if (botRegex.test(request.text)) {
+      // && getRandomInt(2) == 1
+      console.log("BOT");
+      this.res.writeHead(200);
+      this.res.end(postMessage(request.text.match(regex), true));
+    }
   } else {
-    console.log("don't care about: " + request.text);
+    console.log(
+      "don't care about: " + request.text + ", from: " + request.name
+    );
     this.res.writeHead(200);
     this.res.end();
   }
 }
 
-function postMessage(matches) {
+function postMessage(matches, test) {
   var options, body, botReq;
   let botResponse = "";
   if (matches[0] == 169) {
@@ -233,6 +292,44 @@ function postMessage(matches) {
       },
     ];
   }
+
+  if (test != true) {
+    console.log("sending " + botResponse + " to " + botID);
+
+    botReq = HTTPS.request(options, function (res) {
+      if (res.statusCode == 202) {
+        //neat
+      } else {
+        console.log("rejecting bad status code " + res.statusCode);
+      }
+    });
+
+    botReq.on("error", function (err) {
+      console.log("error posting message " + JSON.stringify(err));
+    });
+    botReq.on("timeout", function (err) {
+      console.log("timeout posting message " + JSON.stringify(err));
+    });
+    botReq.end(JSON.stringify(body));
+  } else {
+    console.log("Test: " + botResponse + " to HTML? ");
+    return botResponse;
+  }
+}
+
+function postAIMessage(botResponse) {
+  var options, body, botReq;
+
+  options = {
+    hostname: "api.groupme.com",
+    path: "/v3/bots/post",
+    method: "POST",
+  };
+
+  body = {
+    bot_id: botID,
+    text: botResponse,
+  };
 
   console.log("sending " + botResponse + " to " + botID);
 

@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Bot Tester</title>
+  </head>
+  <body>
+    <h1>Test Your Bot</h1>
+    <form id="messageForm" action="/" method="post">
+      <input
+        type="text"
+        id="messageInput"
+        name="message"
+        placeholder="Enter your message"
+      />
+      <button type="submit">Send</button>
+    </form>
+    <div id="botResponse"></div>
+
+    <script>
+      const form = document.getElementById("messageForm");
+      const responseDiv = document.getElementById("botResponse");
+
+      form.addEventListener("submit", (e) => {
+        e.preventDefault();
+        const message = document.getElementById("messageInput").value;
+
+        const requestData = {
+          attachments: [],
+          avatar_url: "https://i.groupme.com/123456789", // Example URL
+          created_at: Date.now() / 1000, // Current timestamp (seconds)
+          group_id: "1234567890", // Example group ID
+          id: "1234567890", // Example message ID
+          name: "Test User", // Or get the user's name somehow
+          sender_id: "12345", // Example sender ID
+          sender_type: "user",
+          source_guid: "GUID-" + Date.now(), // Unique GUID
+          system: false,
+          text: message,
+          user_id: "1234567890", // Example user ID
+        };
+
+        fetch("/", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/x-www-form-urlencoded",
+          },
+          body: JSON.stringify(requestData),
+        })
+          .then((response) => response.text()) // Get the text response
+          .then((data) => {
+            console.error("Data:", data);
+            responseDiv.textContent = data; // Display it
+            document.getElementById("messageInput").value = ""; // Clear input
+          })
+          .catch((error) => {
+            console.error("Error:", error);
+            responseDiv.textContent = "Error communicating with bot.";
+          });
+      });
+    </script>
+  </body>
+</html>
