@@ -1,41 +1,26 @@
-var http, director, cool, bot, router, server, port, fs;
+const express = require("express");
+const bot = require("./bot.js");
 
-http = require("http");
-director = require("director");
-cool = require("cool-ascii-faces");
-bot = require("./bot.js");
-fs = require("fs"); // Require the file system module
+const app = express(); // Create an Express app
+app.use(express.json()); // Enable parsing JSON request bodies
+app.use(express.urlencoded({ extended: true }));
 
-router = new director.http.Router({
-  "/": {
-    post: bot.respond,
-    get: ping,
-  },
+// Routes
+app.post("/", bot.respond); // Bot interaction
+// app.get("/", ping); // Serve index.html
+// app.post("/add_phrase", addPhrase); // Add phrase route
+// app.get("/phrases", getPhrases); // Get phrases route
+
+// Serve static files from the "code" directory
+app.use(express.static(__dirname + "/code"));
+
+// Explicit route for index.html (if needed) - only if express.static does not work
+app.get("/", (req, res) => {
+  res.sendFile(__dirname + "/index.html"); // Use res.sendFile
 });
 
-server = http.createServer(function (req, res) {
-  req.chunks = [];
-  req.on("data", function (chunk) {
-    req.chunks.push(chunk.toString());
-  });
-
-  router.dispatch(req, res, function (err) {
-    res.writeHead(err.status, { "Content-Type": "text/plain" });
-    res.end(err.message);
-  });
+const port = Number(process.env.PORT || 5000);
+app.listen(port, "0.0.0.0", function () {
+  console.log(`Server listening on port ${port}`);
+  // populatePhrases(); // Call populatePhrases after the server starts
 });
-
-port = Number(process.env.PORT || 5000);
-server.listen(port, "0.0.0.0");
-
-function ping() {
-  const data = fs.readFileSync("./code/index.html");
-
-  if (!data) {
-    this.res.writeHead(500, { "Content-Type": "text/plain" });
-    this.res.end("Error loading index.html");
-  } else {
-    this.res.writeHead(200, { "Content-Type": "text/html" }); // Set correct content type
-    this.res.end(data); // Send the HTML data
-  }
-}

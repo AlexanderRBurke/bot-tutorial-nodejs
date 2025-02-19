@@ -58,39 +58,40 @@ const regexString = Object.keys(phrases)
 
 const regex = new RegExp(`\\b(${regexString})\\b`, "gi");
 
-async function respond() {
-  var request = JSON.parse(this.req.chunks[0]),
-    botRegex = regex;
+async function respond(req, res) {
+  // console.log("req.body: " + JSON.stringify(req.body));
+  const request = req.body; // Access request body using req.body (Express),
+  botRegex = regex;
 
   if (request.name != "RoN Bot" && request.text) {
     const AI_regex = /@bot/i;
     if (AI_regex.test(request.text)) {
       const result = await model.generateContent(request.text);
-      this.res.writeHead(200);
+      res.writeHead(200);
       message = postAIMessage(
         result.response.text(),
         request.name == "Test User"
       );
-      this.res.end(message);
+      res.end(message);
     } else if (botRegex.test(request.text)) {
       // && getRandomInt(2) == 1
-      this.res.writeHead(200);
+      res.writeHead(200);
       message = postMessage(
         request.text.match(regex),
         request.name == "Test User"
       );
-      this.res.end(message);
+      res.end(message);
     } else {
       console.log("not bot, but dont care: " + request.text);
-      this.res.writeHead(200);
-      this.res.end();
+      res.writeHead(200);
+      res.end();
     }
   } else {
     console.log(
       "don't care about: " + request.text + ", from: " + request.name
     );
-    this.res.writeHead(200);
-    this.res.end();
+    res.writeHead(200);
+    res.end();
   }
 }
 

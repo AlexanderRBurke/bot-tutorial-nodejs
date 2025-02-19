@@ -48,11 +48,10 @@
           user_id: "1234567890", // Example user ID
         };
 
+        console.log(requestData);
         fetch("/", {
           method: "POST",
-          headers: {
-            "Content-Type": "application/x-www-form-urlencoded",
-          },
+          headers: { "Content-type": "application/json; charset=UTF-8" },
           body: JSON.stringify(requestData),
         })
           .then((response) => response.text()) // Get the text response
