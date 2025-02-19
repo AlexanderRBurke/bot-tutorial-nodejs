@@ -23,6 +23,18 @@
     <div id="imageDiv"></div>
     <div id="mapDiv" style="height: 400px; width: 600px"></div>
 
+    <!-- <h2>Add Phrase</h2>
+    <form id="addPhraseForm">
+      <label for="key">Key:</label><br />
+      <input type="text" id="key" name="key" /><br />
+      <label for="value">Value:</label><br />
+      <textarea id="value" name="value"></textarea><br /><br />
+      <button type="submit">Add Phrase</button>
+    </form>
+
+    <h2>Phrases</h2>
+    <ul id="phrasesList"></ul> -->
+
     <script>
       const form = document.getElementById("messageForm");
       const responseDiv = document.getElementById("botResponse");
@@ -93,6 +105,59 @@
             responseDiv.textContent = "Error communicating with bot.";
           });
       });
+
+      // // Add Phrase Form Handling
+      // const addPhraseForm = document.getElementById("addPhraseForm");
+      // addPhraseForm.addEventListener("submit", (e) => {
+      //   e.preventDefault();
+
+      //   const key = document.getElementById("key").value;
+      //   const value = document.getElementById("value").value;
+
+      //   console.log("Trying to add: " + key + " " + value);
+      //   fetch("/add_phrase", {
+      //     method: "POST",
+      //     headers: {
+      //       "Content-Type": "application/json",
+      //     },
+      //     body: JSON.stringify({ key, value }),
+      //   })
+      //     .then((response) => response.json())
+      //     .then((data) => {
+      //       console.log(data.message);
+      //       document.getElementById("key").value = "";
+      //       document.getElementById("value").value = "";
+
+      //       // Refresh phrase list after adding
+      //       fetchPhrases();
+      //     })
+      //     .catch((error) => {
+      //       console.error("Error:", error);
+      //     });
+      // });
+
+      // // Function to fetch and display phrases
+      // function fetchPhrases() {
+      //   fetch("/phrases")
+      //     .then((response) => response.json())
+      //     .then((phrases) => {
+      //       const phrasesList = document.getElementById("phrasesList");
+      //       phrasesList.innerHTML = ""; // Clear previous list
+      //       for (const key in phrases) {
+      //         const li = document.createElement("li");
+      //         li.textContent = `${key}: ${phrases[key]}`;
+      //         phrasesList.appendChild(li);
+      //       }
+      //     })
+      //     .catch((error) => {
+      //       console.error("Error fetching phrases:", error);
+      //     });
+      // }
+
+      // // Fetch phrases on page load
+      // window.addEventListener("DOMContentLoaded", () => {
+      //   fetchPhrases();
+      // });
     </script>
   </body>
 </html>
