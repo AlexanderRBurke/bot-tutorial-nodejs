@@ -4,3 +4,4 @@ npm-debug.log
 *.txt
 .env
 ron-bot-4*
+dist/*

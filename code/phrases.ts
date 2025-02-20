@@ -1,8 +1,8 @@
 // phrases.js
-const fs = require("fs");
-const beeString = fs.readFileSync("./beeMovie.txt").toString("utf-8");
+import { readFileSync } from "fs";
+const beeString = readFileSync("./beeMovie.txt").toString("utf-8");
 
-let phrases = {
+let oldPhrases = {
   0: "RoN?",
   "Can't": "Riiiiiiiight.",
   time: "Time is a tool you can put on the wall, Or wear it on your wrist.",
@@ -127,12 +127,12 @@ let phrases = {
   1738: "https://www.youtube.com/watch?v=1AM_VSfudig",
 };
 
-const newPhrases = Object.fromEntries(
-  Object.entries(phrases).map(([k, v]) => [k.toLowerCase(), v])
+export const phrases = Object.fromEntries(
+  Object.entries(oldPhrases).map(([k, v]) => [k.toLowerCase(), v])
 );
 
-function handlePhrase(message) {
-  let attachments = {};
+export function handlePhrase(message: string) {
+  let attachments: any[] = [];
 
   // Convert the message to lowercase for case-insensitive matching
   const lowerCaseMessage = message.toLowerCase();
@@ -178,5 +178,3 @@ function handlePhrase(message) {
 
   return attachments;
 }
-
-module.exports = { phrases: newPhrases, handlePhrase }; // Export the function

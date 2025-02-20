@@ -1,7 +1,7 @@
 // secrets.js
-const {SecretManagerServiceClient} = require('@google-cloud/secret-manager');
+const { SecretManagerServiceClient } = require("@google-cloud/secret-manager");
 
-async function accessSecret(secretName) {
+export async function accessSecret(secretName: string) {
   const client = new SecretManagerServiceClient();
   const name = `projects/${process.env.GCP_PROJECT_ID}/secrets/${secretName}/versions/latest`;
 
@@ -15,8 +15,3 @@ async function accessSecret(secretName) {
     throw error; // Re-throw for handling in the calling module
   }
 }
-
-// Export the function so it can be used in other files.  This is CRUCIAL.
-module.exports = {
-  getSecret: accessSecret, // You can name the exported function differently if you like
-};

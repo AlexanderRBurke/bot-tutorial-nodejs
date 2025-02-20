@@ -1,2 +1,2 @@
 runtime: nodejs22
-entrypoint: node code/index.js
+entrypoint: node dist/index.js 

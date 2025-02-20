@@ -1,0 +1,12 @@
+{
+  "extends": "@tsconfig/node22",
+  "compilerOptions": {
+    "outDir": "dist",
+    "esModuleInterop": true
+  },
+  "include": [
+    "code/*.ts",
+    "types/cool-ascii-faces.d.ts"
+  ],
+  "exclude": ["node_modules"]
+}

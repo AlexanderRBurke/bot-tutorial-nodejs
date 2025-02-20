@@ -1,7 +1,9 @@
-const express = require("express");
-const bot = require("./bot.js");
+import express, { Request, Response } from "express"; // Import the types
+import { QuerySnapshot, QueryDocumentSnapshot } from "firebase/firestore";
+
+const bot = require("./bot");
 const admin = require("firebase-admin");
-const { phrases, handlePhrase } = require("./phrases");
+import { phrases, handlePhrase } from "./phrases";
 
 const app = express(); // Create an Express app
 app.use(express.json()); // Enable parsing JSON request bodies
@@ -16,7 +18,7 @@ app.post("/", bot.respond); // Bot interaction
 app.use(express.static(__dirname + "/code"));
 
 // Explicit route for index.html (if needed) - only if express.static does not work
-app.get("/", (req, res) => {
+app.get("/", (req: Request, res: Response) => {
   res.sendFile(__dirname + "/index.html"); // Use res.sendFile
 });
 
@@ -34,7 +36,7 @@ admin.initializeApp({
 });
 const db = admin.firestore();
 
-async function addPhrase(req, res) {
+async function addPhrase(req: Request, res: Response) {
   console.log("addPhrase: " + JSON.stringify(req.body));
   let body = "";
   // req.on("data", (chunk) => {
@@ -54,12 +56,17 @@ async function addPhrase(req, res) {
   // });
 }
 
-async function getPhrases(req, res) {
+interface Phrase {
+  // Define an interface for your data (Recommended)
+  phrase: string;
+}
+
+async function getPhrases(req: Request, res: Response) {
   try {
     const phrasesSnapshot = await db.collection("phrases").get();
-    const phrases = {};
-    phrasesSnapshot.forEach((doc) => {
-      phrases[doc.id] = doc.data().value;
+    // const phrases = {};
+    phrasesSnapshot.forEach((doc: QueryDocumentSnapshot<Phrase>) => {
+      phrases[doc.id] = doc.data().phrase;
     });
     res.json(phrases);
   } catch (error) {
@@ -68,7 +75,7 @@ async function getPhrases(req, res) {
   }
 }
 
-async function populatePhrases(req, res) {
+async function populatePhrases(req: Request, res: Response) {
   try {
     const batch = db.batch(); // Use a batch for efficient writes
 

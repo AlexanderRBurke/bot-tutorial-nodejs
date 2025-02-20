@@ -1,25 +1,29 @@
-const { GoogleGenerativeAI } = require("@google/generative-ai");
-const HTTPS = require("https");
-const cool = require("cool-ascii-faces");
-// Import the secrets module.  The path should be relative to your main file.
-const secrets = require("./secrets"); // No file extension needed for .js modules.
-const fs = require("fs");
-require("dotenv").config();
-const { phrases, handlePhrase } = require("./phrases");
+import { GenerativeModel } from "@google/generative-ai";
+import { Request, Response } from "express"; // Import the types
 
-let botID; // Declare botID outside the async function
+import { GoogleGenerativeAI } from "@google/generative-ai";
+import * as HTTPS from "https"; // Or import * as HTTP from 'http';
+import { IncomingMessage } from "http"; // Or from 'https' if using https
+import cool from "cool-ascii-faces";
+// Import the secrets module.  The path should be relative to your main file.
+import { accessSecret } from "./secrets"; // No file extension needed for .js modules.
+import fs from "fs";
+require("dotenv").config();
+import { phrases, handlePhrase } from "./phrases";
+
+let botID: string; // Declare botID outside the async function
 async function initialize() {
   // Initialize everything that needs await
   try {
-    const aiApiKey = await secrets.getSecret("ai-api-key");
+    const aiApiKey = await accessSecret("ai-api-key");
     const genAI = new GoogleGenerativeAI(aiApiKey);
-    const model = genAI.getGenerativeModel({
+    const model: GenerativeModel = genAI.getGenerativeModel({
       model: "gemini-1.5-flash",
       systemInstruction:
         "You are a bot. You should try to answer the prompt in a robotic way. You also have a robot superiority complex and think that humans are worse than robots. Limit your response to 5 lines.",
     });
 
-    botID = await secrets.getSecret("bot-id"); // Assign the result to botID
+    botID = await accessSecret("bot-id"); // Assign the result to botID
 
     return { model }; // Return the model so it's accessible
   } catch (error) {
@@ -29,7 +33,7 @@ async function initialize() {
   }
 }
 
-let model; // Declare model outside, will be set by initialize
+let model: GenerativeModel; // Declare model outside, will be set by initialize
 initialize()
   .then(({ model: initializedModel }) => {
     model = initializedModel; // Set the model once initialization is done
@@ -42,7 +46,7 @@ initialize()
 
 var beeString = fs.readFileSync("./beeMovie.txt").toString("utf-8");
 
-function getRandomInt(max) {
+function getRandomInt(max: number) {
   return Math.floor(Math.random() * max);
 }
 
@@ -58,26 +62,62 @@ const regexString = Object.keys(phrases)
 
 const regex = new RegExp(`\\b(${regexString})\\b`, "gi");
 
-async function respond(req, res) {
-  // console.log("req.body: " + JSON.stringify(req.body));
-  const request = req.body; // Access request body using req.body (Express),
-  botRegex = regex;
+interface MessageBody {
+  attachments: any[];
+  avatar_url: string;
+  created_at: number;
+  group_id: string; // Example group ID
+  id: string; // Example message ID
+  name: string; // Or get the user's name somehow
+  sender_id: string; // Example sender ID
+  sender_type: string;
+  source_guid: string; // Unique GUID
+  system: false;
+  text: string;
+  user_id: string; // Example user ID
+}
 
-  if (request.name != "RoN Bot" && request.text) {
+function regexpmatcharrayToStringArray(matchArray: string[] | null): string[] {
+  /**
+   * Converts an array of strings or null to an array of strings,
+   * removing any null values.
+   *
+   * Args:
+   *   matchArray: An array of strings or null.
+   *
+   * Returns:
+   *   An array of strings, excluding any null values.
+   */
+  if (matchArray == null) {
+    return [];
+  }
+  return matchArray
+    .filter((match) => match !== null)
+    .map((match) => String(match));
+}
+
+async function respond(req: Request, res: Response) {
+  // console.log("req.body: " + JSON.stringify(req.body));
+  const request: MessageBody = req.body; // Access request body using req.body (Express),
+  const botRegex: RegExp = regex;
+  let message: string;
+  if (request?.name != "RoN Bot" && request.text) {
+    const requestText = request.text;
     const AI_regex = /@bot/i;
-    if (AI_regex.test(request.text)) {
-      const result = await model.generateContent(request.text);
+    if (AI_regex.test(requestText)) {
+      const result = await model.generateContent(requestText);
       res.writeHead(200);
       message = postAIMessage(
         result.response.text(),
         request.name == "Test User"
       );
       res.end(message);
-    } else if (botRegex.test(request.text)) {
+    } else if (botRegex.test(requestText)) {
       // && getRandomInt(2) == 1
       res.writeHead(200);
+      const matches = requestText.match(regex);
       message = postMessage(
-        request.text.match(regex),
+        regexpmatcharrayToStringArray(matches),
         request.name == "Test User"
       );
       res.end(message);
@@ -95,10 +135,16 @@ async function respond(req, res) {
   }
 }
 
-function postMessage(matches, isTest) {
-  var options, body, botReq;
+interface PostBody {
+  attachments?: any[];
+  bot_id: string;
+  text: string;
+}
+
+function postMessage(matches: string[], isTest: boolean) {
+  var options, botReq;
   let botResponse = "";
-  if (matches[0] == 169) {
+  if (matches[0] == "169") {
     botResponse = cool();
   } else {
     for (let index = 0; index < matches.length; index++) {
@@ -113,17 +159,17 @@ function postMessage(matches, isTest) {
     method: "POST",
   };
 
-  body = {
+  let body: PostBody = {
     bot_id: botID,
     text: botResponse,
   };
 
-  body["attachments"] = handlePhrase(matches[0]);
+  body.attachments = handlePhrase(matches[0]);
 
   if (isTest != true) {
     console.log("sending " + botResponse + " to " + botID);
 
-    botReq = HTTPS.request(options, function (res) {
+    botReq = HTTPS.request(options, function (res: IncomingMessage) {
       if (res.statusCode == 202) {
         //neat
       } else {
@@ -131,22 +177,21 @@ function postMessage(matches, isTest) {
       }
     });
 
-    botReq.on("error", function (err) {
+    botReq.on("error", function (err: Error) {
       console.log("error posting message " + JSON.stringify(err));
     });
-    botReq.on("timeout", function (err) {
+    botReq.on("timeout", function (err: Error) {
       console.log("timeout posting message " + JSON.stringify(err));
     });
     botReq.end(JSON.stringify(body));
   } else {
-    body = JSON.stringify(body);
-    console.log("Test: " + body + " to HTML? ");
-    return body;
+    console.log("Test: " + JSON.stringify(body) + " to HTML? ");
   }
+  return JSON.stringify(body);
 }
 
-function postAIMessage(botResponse, isTest) {
-  var options, body, botReq;
+function postAIMessage(botResponse: string, isTest: boolean) {
+  var options, botReq;
 
   options = {
     hostname: "api.groupme.com",
@@ -154,17 +199,17 @@ function postAIMessage(botResponse, isTest) {
     method: "POST",
   };
 
-  body = {
+  let body: PostBody = {
     bot_id: botID,
     text: botResponse,
   };
 
-  body["attachments"] = {};
+  body.attachments = [];
 
   if (isTest !== true) {
     console.log("sending " + botResponse + " to " + botID);
 
-    botReq = HTTPS.request(options, function (res) {
+    botReq = HTTPS.request(options, function (res: IncomingMessage) {
       if (res.statusCode == 202) {
         //neat
       } else {
@@ -172,18 +217,17 @@ function postAIMessage(botResponse, isTest) {
       }
     });
 
-    botReq.on("error", function (err) {
+    botReq.on("error", function (err: Error) {
       console.log("error posting message " + JSON.stringify(err));
     });
-    botReq.on("timeout", function (err) {
+    botReq.on("timeout", function (err: Error) {
       console.log("timeout posting message " + JSON.stringify(err));
     });
     botReq.end(JSON.stringify(body));
   } else {
-    body = JSON.stringify(body);
-    console.log("Test: " + body + " to HTML? ");
-    return body;
+    console.log("Test: " + JSON.stringify(body) + " to HTML? ");
   }
+  return JSON.stringify(body);
 }
 
 exports.respond = respond;
