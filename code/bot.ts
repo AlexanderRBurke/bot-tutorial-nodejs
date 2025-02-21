@@ -11,6 +11,8 @@ import fs from "fs";
 require("dotenv").config();
 import { phrases, handlePhrase } from "./phrases";
 
+let uses = new Map<string, number>();
+let currentDay: number = new Date().getDay();
 let botID: string; // Declare botID outside the async function
 async function initialize() {
   // Initialize everything that needs await
@@ -77,31 +79,26 @@ interface MessageBody {
   user_id: string; // Example user ID
 }
 
-function regexpmatcharrayToStringArray(matchArray: string[] | null): string[] {
-  /**
-   * Converts an array of strings or null to an array of strings,
-   * removing any null values.
-   *
-   * Args:
-   *   matchArray: An array of strings or null.
-   *
-   * Returns:
-   *   An array of strings, excluding any null values.
-   */
-  if (matchArray == null) {
-    return [];
-  }
-  return matchArray
-    .filter((match) => match !== null)
-    .map((match) => String(match));
-}
-
 async function respond(req: Request, res: Response) {
-  // console.log("req.body: " + JSON.stringify(req.body));
+  if (currentDay != new Date().getDay()) {
+    console.log("Reset uses map");
+    uses.clear();
+    currentDay = new Date().getDay();
+  }
   const request: MessageBody = req.body; // Access request body using req.body (Express),
   const botRegex: RegExp = regex;
-  let message: string;
+  let message: PostBody;
   if (request?.name != "RoN Bot" && request.text) {
+    if (!uses.has(request.sender_id)) {
+      uses.set(request.sender_id, 0);
+    }
+    let usesById = <number>uses.get(request.sender_id);
+    if (usesById > 5) {
+      console.log("Too many uses from: " + request.name);
+      res.writeHead(200);
+      res.end();
+      return;
+    }
     const requestText = request.text;
     const AI_regex = /@bot/i;
     if (AI_regex.test(requestText)) {
@@ -111,7 +108,8 @@ async function respond(req: Request, res: Response) {
         result.response.text(),
         request.name == "Test User"
       );
-      res.end(message);
+      message.text = usesLogic(request.sender_id, usesById) + message.text;
+      res.end(JSON.stringify(message));
     } else if (botRegex.test(requestText)) {
       // && getRandomInt(2) == 1
       res.writeHead(200);
@@ -120,7 +118,8 @@ async function respond(req: Request, res: Response) {
         regexpmatcharrayToStringArray(matches),
         request.name == "Test User"
       );
-      res.end(message);
+      message.text = usesLogic(request.sender_id, usesById) + message.text;
+      res.end(JSON.stringify(message));
     } else {
       console.log("not bot, but dont care: " + request.text);
       res.writeHead(200);
@@ -187,7 +186,7 @@ function postMessage(matches: string[], isTest: boolean) {
   } else {
     console.log("Test: " + JSON.stringify(body) + " to HTML? ");
   }
-  return JSON.stringify(body);
+  return body;
 }
 
 function postAIMessage(botResponse: string, isTest: boolean) {
@@ -227,7 +226,29 @@ function postAIMessage(botResponse: string, isTest: boolean) {
   } else {
     console.log("Test: " + JSON.stringify(body) + " to HTML? ");
   }
-  return JSON.stringify(body);
+  return body;
+}
+
+function regexpmatcharrayToStringArray(matchArray: string[] | null): string[] {
+  if (matchArray == null) {
+    return [];
+  }
+  return matchArray
+    .filter((match) => match !== null)
+    .map((match) => String(match));
+}
+
+function usesLogic(sender_id: string, usesByUser: number) {
+  let messageToStartWith: string = "";
+  if (usesByUser == 5) {
+    messageToStartWith = "This is your FINAL bot use for the day. \n ";
+  } else if (usesByUser == 4) {
+    messageToStartWith = "WARNING: You have one more bot use for today. \n ";
+  }
+  usesByUser++;
+  uses.set(sender_id, usesByUser);
+
+  return messageToStartWith;
 }
 
 exports.respond = respond;

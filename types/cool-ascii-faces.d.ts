@@ -1,1 +1,1 @@
-declare module 'cool-ascii-faces';
+declare module "cool-ascii-faces";

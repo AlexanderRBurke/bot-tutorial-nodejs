@@ -2,11 +2,15 @@
   "extends": "@tsconfig/node22",
   "compilerOptions": {
     "outDir": "dist",
+    "typeRoots": [
+      "./node_modules/@types", // Default location
+      "./types" // Your custom types directory
+    ],
     "esModuleInterop": true
   },
   "include": [
     "code/*.ts",
-    "types/cool-ascii-faces.d.ts"
+    "types/**/*.d.ts" // Include your types directory.
   ],
   "exclude": ["node_modules"]
 }

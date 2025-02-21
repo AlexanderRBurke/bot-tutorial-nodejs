@@ -1,3 +1,6 @@
 {
-  "ext": "js,html,env,ts"
+  "ext": "js,html,env,ts,json",
+  "exec": "npm run dev",
+  "ignore": ["node_modules, dist"],
+  "watch": ["code"]
 }
