@@ -14,6 +14,7 @@ import { phrases, handlePhrase } from "./phrases";
 let uses = new Map<string, number>();
 let currentDay: number = new Date().getDay();
 let botID: string; // Declare botID outside the async function
+let conversationHistory = "";
 async function initialize() {
   // Initialize everything that needs await
   try {
@@ -22,7 +23,7 @@ async function initialize() {
     const model: GenerativeModel = genAI.getGenerativeModel({
       model: "gemini-1.5-flash",
       systemInstruction:
-        "You are a bot. You should try to answer the prompt in a robotic way. You also have a robot superiority complex and think that humans are worse than robots. Limit your response to 5 lines.",
+        "You are a bot. You should try to answer the prompt in a robotic way. You also have a robot superiority complex and think that humans are worse than robots. Each prompt will have a history before it, use the history when answering.",
     });
 
     botID = await accessSecret("bot-id"); // Assign the result to botID
@@ -92,8 +93,8 @@ async function respond(req: Request, res: Response) {
     if (!uses.has(request.sender_id)) {
       uses.set(request.sender_id, 0);
     }
-    let usesById = <number>uses.get(request.sender_id);
-    if (usesById > 5) {
+
+    if (<number>uses.get(request.sender_id) > 5) {
       console.log("Too many uses from: " + request.name);
       res.writeHead(200);
       res.end();
@@ -102,23 +103,29 @@ async function respond(req: Request, res: Response) {
     const requestText = request.text;
     const AI_regex = /@bot/i;
     if (AI_regex.test(requestText)) {
-      const result = await model.generateContent(requestText);
+      if (model == undefined || model == null) {
+        await initialize();
+      }
+      const prompt = `${conversationHistory}\nUser: ${request.text}\nBot:`; // Inject history
+      const result = await model.generateContent(prompt);
+      conversationHistory += `${request.name}: ${
+        request.text
+      }\nBot: ${result.response.text()}\n`; // Update history
+      // console.log("conversationHistory: " + conversationHistory);
       res.writeHead(200);
-      message = postAIMessage(
-        result.response.text(),
-        request.name == "Test User"
-      );
-      message.text = usesLogic(request.sender_id, usesById) + message.text;
+      message = postMessage(result.response.text(), [], request);
+
       res.end(JSON.stringify(message));
     } else if (botRegex.test(requestText)) {
       // && getRandomInt(2) == 1
       res.writeHead(200);
       const matches = requestText.match(regex);
       message = postMessage(
+        "",
         regexpmatcharrayToStringArray(matches),
-        request.name == "Test User"
+        request
       );
-      message.text = usesLogic(request.sender_id, usesById) + message.text;
+
       res.end(JSON.stringify(message));
     } else {
       console.log("not bot, but dont care: " + request.text);
@@ -140,9 +147,13 @@ interface PostBody {
   text: string;
 }
 
-function postMessage(matches: string[], isTest: boolean) {
+function postMessage(
+  botResponse: string,
+  matches: string[],
+  request: MessageBody
+) {
   var options, botReq;
-  let botResponse = "";
+
   if (matches[0] == "169") {
     botResponse = cool();
   } else {
@@ -158,54 +169,16 @@ function postMessage(matches: string[], isTest: boolean) {
     method: "POST",
   };
 
+  let usesById = <number>uses.get(request.sender_id);
   let body: PostBody = {
     bot_id: botID,
-    text: botResponse,
+    text: usesLogic(request.sender_id, usesById) + botResponse,
   };
 
-  body.attachments = handlePhrase(matches[0]);
+  body.attachments = matches.length > 0 ? handlePhrase(matches[0]) : [];
 
+  let isTest: boolean = request.name == "Test User";
   if (isTest != true) {
-    console.log("sending " + botResponse + " to " + botID);
-
-    botReq = HTTPS.request(options, function (res: IncomingMessage) {
-      if (res.statusCode == 202) {
-        //neat
-      } else {
-        console.log("rejecting bad status code " + res.statusCode);
-      }
-    });
-
-    botReq.on("error", function (err: Error) {
-      console.log("error posting message " + JSON.stringify(err));
-    });
-    botReq.on("timeout", function (err: Error) {
-      console.log("timeout posting message " + JSON.stringify(err));
-    });
-    botReq.end(JSON.stringify(body));
-  } else {
-    console.log("Test: " + JSON.stringify(body) + " to HTML? ");
-  }
-  return body;
-}
-
-function postAIMessage(botResponse: string, isTest: boolean) {
-  var options, botReq;
-
-  options = {
-    hostname: "api.groupme.com",
-    path: "/v3/bots/post",
-    method: "POST",
-  };
-
-  let body: PostBody = {
-    bot_id: botID,
-    text: botResponse,
-  };
-
-  body.attachments = [];
-
-  if (isTest !== true) {
     console.log("sending " + botResponse + " to " + botID);
 
     botReq = HTTPS.request(options, function (res: IncomingMessage) {
