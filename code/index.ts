@@ -1,8 +1,8 @@
 import express, { Request, Response } from "express"; // Import the types
 import { QuerySnapshot, QueryDocumentSnapshot } from "firebase/firestore";
+import * as admin from 'firebase-admin';
 
 const bot = require("./bot");
-const admin = require("firebase-admin");
 import { phrases, handlePhrase } from "./phrases";
 
 const app = express(); // Create an Express app
@@ -34,16 +34,11 @@ admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
   projectId: process.env.GCP_PROJECT_ID,
 });
-const db = admin.firestore();
+export const db: admin.firestore.Firestore = admin.firestore();
 
 async function addPhrase(req: Request, res: Response) {
   console.log("addPhrase: " + JSON.stringify(req.body));
-  let body = "";
-  // req.on("data", (chunk) => {
-  //   body += chunk;
-  // });
 
-  // req.on("end", async () => {
   try {
     const { key, value } = req.body;
     console.log("Trying to add: " + key + " " + value);
@@ -61,38 +56,38 @@ interface Phrase {
   phrase: string;
 }
 
-async function getPhrases(req: Request, res: Response) {
-  try {
-    const phrasesSnapshot = await db.collection("phrases").get();
-    // const phrases = {};
-    phrasesSnapshot.forEach((doc: QueryDocumentSnapshot<Phrase>) => {
-      phrases[doc.id] = doc.data().phrase;
-    });
-    res.json(phrases);
-  } catch (error) {
-    console.error("Error retrieving phrases:", error);
-    res.status(500).json({ error: "Error retrieving phrases" });
-  }
-}
+// async function getPhrases(req: Request, res: Response) {
+//   try {
+//     const phrasesSnapshot = await db.collection("phrases").get();
+//     // const phrases = {};
+//     phrasesSnapshot.forEach((doc: QueryDocumentSnapshot<Phrase>) => {
+//       phrases[doc.id] = doc.data().phrase;
+//     });
+//     res.json(phrases);
+//   } catch (error) {
+//     console.error("Error retrieving phrases:", error);
+//     res.status(500).json({ error: "Error retrieving phrases" });
+//   }
+// }
 
-async function populatePhrases(req: Request, res: Response) {
-  try {
-    const batch = db.batch(); // Use a batch for efficient writes
+// async function populatePhrases(req: Request, res: Response) {
+//   try {
+//     const batch = db.batch(); // Use a batch for efficient writes
 
-    for (const key in phrases) {
-      const phraseData = phrases[key];
-      // ***Wrap the string in an object***
-      const dataToSet = {
-        value: phraseData, // Or any property name you want (e.g., 'text', 'message')
-      };
-      // console.log(key + " : " + dataToSet);
-      const phraseRef = db.collection("phrases").doc(key); // Reference to the document
-      batch.set(phraseRef, dataToSet); // Add the set operation to the batch
-    }
+//     for (const key in phrases) {
+//       const phraseData = phrases[key];
+//       // ***Wrap the string in an object***
+//       const dataToSet = {
+//         value: phraseData, // Or any property name you want (e.g., 'text', 'message')
+//       };
+//       // console.log(key + " : " + dataToSet);
+//       const phraseRef = db.collection("phrases").doc(key); // Reference to the document
+//       batch.set(phraseRef, dataToSet); // Add the set operation to the batch
+//     }
 
-    await batch.commit(); // Commit the batch write
-    console.log("Phrases populated successfully!");
-  } catch (error) {
-    console.error("Error populating phrases:", error);
-  }
-}
+//     await batch.commit(); // Commit the batch write
+//     console.log("Phrases populated successfully!");
+//   } catch (error) {
+//     console.error("Error populating phrases:", error);
+//   }
+// }

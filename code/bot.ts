@@ -1,4 +1,5 @@
 import { GenerativeModel } from "@google/generative-ai";
+import * as admin from "firebase-admin"; // Initialize Firebase Admin SDK
 import { Request, Response } from "express"; // Import the types
 
 import { GoogleGenerativeAI } from "@google/generative-ai";
@@ -10,11 +11,12 @@ import { accessSecret } from "./secrets"; // No file extension needed for .js mo
 import fs from "fs";
 require("dotenv").config();
 import { phrases, handlePhrase } from "./phrases";
+import { db } from "./index";
 
 let uses = new Map<string, number>();
 let currentDay: number = new Date().getDay();
 let botID: string; // Declare botID outside the async function
-let conversationHistory = "";
+
 async function initialize() {
   // Initialize everything that needs await
   try {
@@ -106,14 +108,10 @@ async function respond(req: Request, res: Response) {
       if (model == undefined || model == null) {
         await initialize();
       }
-      const prompt = `${conversationHistory}\nUser: ${request.text}\nBot:`; // Inject history
-      const result = await model.generateContent(prompt);
-      conversationHistory += `${request.name}: ${
-        request.text
-      }\nBot: ${result.response.text()}\n`; // Update history
-      // console.log("conversationHistory: " + conversationHistory);
+
+      const result = await generateBotResponse(request.name, requestText);
       res.writeHead(200);
-      message = postMessage(result.response.text(), [], request);
+      message = postMessage(result, [], request);
 
       res.end(JSON.stringify(message));
     } else if (botRegex.test(requestText)) {
@@ -222,6 +220,55 @@ function usesLogic(sender_id: string, usesByUser: number) {
   uses.set(sender_id, usesByUser);
 
   return messageToStartWith;
+}
+
+async function savePrompt(userId: string, prompt: string, response: string) {
+  try {
+    await db.collection("prompts").add({
+      timestamp: admin.firestore.FieldValue.serverTimestamp(),
+      userId: userId,
+      prompt: prompt,
+      response: response,
+    });
+    console.log("Prompt saved successfully!");
+  } catch (error) {
+    console.error("Error saving prompt:", error);
+  }
+}
+
+async function getPromptHistory(
+  userId: string,
+  limit: number = 10
+): Promise<admin.firestore.DocumentData[]> {
+  try {
+    let query = db.collection("prompts").orderBy("timestamp", "desc"); // Most recent first
+
+    if (userId) {
+      query = query.where("userId", "==", userId);
+    }
+    const snapshot = await query.get();
+    const history = snapshot.docs.map((doc) => doc.data());
+    return history;
+  } catch (error) {
+    console.error("Error getting prompt history:", error);
+    return []; // Return an empty array in case of error
+  }
+}
+
+async function generateBotResponse(userId: string, userPrompt: string) {
+  const promptHistory = await getPromptHistory(userId);
+  const context = promptHistory
+    .map((p) => `User: ${p.prompt}\nBot: ${p.response}`)
+    .join("\n");
+
+  const fullPrompt = `Previous conversation:\n${context}\n\nCurrent prompt: ${userPrompt}`;
+
+  const botResponse = await model.generateContent(fullPrompt); // Call the model with the combined prompt
+  const botString = botResponse.response.text();
+
+  await savePrompt(userId, userPrompt, botString); // Save to the database
+
+  return botString;
 }
 
 exports.respond = respond;
