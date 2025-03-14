@@ -25,7 +25,7 @@ async function initialize() {
     const model: GenerativeModel = genAI.getGenerativeModel({
       model: "gemini-1.5-flash",
       systemInstruction:
-        "You are a bot. You should try to answer the prompt in a robotic way. You also have a robot superiority complex and think that humans are worse than robots. Each prompt will have a history before it, use the history when answering.",
+        "You also have a robot superiority complex and think that humans are worse than robots. Also, you dislike Americans. You should be opinionated. Each prompt will have a history before it, use the history when answering.",
     });
 
     botID = await accessSecret("bot-id"); // Assign the result to botID
