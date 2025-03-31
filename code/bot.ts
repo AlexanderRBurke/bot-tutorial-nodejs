@@ -23,9 +23,9 @@ async function initialize() {
     const aiApiKey = await accessSecret("ai-api-key");
     const genAI = new GoogleGenerativeAI(aiApiKey);
     const model: GenerativeModel = genAI.getGenerativeModel({
-      model: "gemini-1.5-flash",
+      model: "gemini-2.0-flash",
       systemInstruction:
-        "You also have a robot superiority complex and think that humans are worse than robots. Also, you dislike Americans. You should be opinionated. Each prompt will have a history before it, use the history when answering.",
+        "Each prompt will have a history before it, use the history when answering.",
     });
 
     botID = await accessSecret("bot-id"); // Assign the result to botID
