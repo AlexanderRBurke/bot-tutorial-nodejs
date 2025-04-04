@@ -24,8 +24,10 @@ async function initialize() {
     const genAI = new GoogleGenerativeAI(aiApiKey);
     const model: GenerativeModel = genAI.getGenerativeModel({
       model: "gemini-2.0-flash",
-      systemInstruction:
-        "Each prompt will have a history before it, use the history when answering.",
+      systemInstruction: `Each prompt will have a history before it, use the history when answering.
+        The format will be "Previous conversation:" followed by the history, and then the user\'s name will be followed by a colon and the current prompt.
+        When the prompt is self referential, only use the messages by the user's name.
+        You can be offensive.`,
     });
 
     botID = await accessSecret("bot-id"); // Assign the result to botID
@@ -98,9 +100,9 @@ async function respond(req: Request, res: Response) {
 
     if (<number>uses.get(request.sender_id) > 5) {
       console.log("Too many uses from: " + request.name);
-      res.writeHead(200);
-      res.end();
-      return;
+      // res.writeHead(200);
+      // res.end();
+      // return;
     }
     const requestText = request.text;
     const AI_regex = /@bot/i;
@@ -243,9 +245,9 @@ async function getPromptHistory(
   try {
     let query = db.collection("prompts").orderBy("timestamp", "desc"); // Most recent first
 
-    if (userId) {
-      query = query.where("userId", "==", userId);
-    }
+    // if (userId) {
+    //   query = query.where("userId", "==", userId);
+    // }
     const snapshot = await query.get();
     const history = snapshot.docs.map((doc) => doc.data());
     return history;
@@ -258,10 +260,10 @@ async function getPromptHistory(
 async function generateBotResponse(userId: string, userPrompt: string) {
   const promptHistory = await getPromptHistory(userId);
   const context = promptHistory
-    .map((p) => `User: ${p.prompt}\nBot: ${p.response}`)
+    .map((p) => `${p.userId}: ${p.prompt}\nBot: ${p.response}`)
     .join("\n");
 
-  const fullPrompt = `Previous conversation:\n${context}\n\nCurrent prompt: ${userPrompt}`;
+  const fullPrompt = `Previous conversation:\n${context}\n\n${userId}:  ${userPrompt}`;
 
   const botResponse = await model.generateContent(fullPrompt); // Call the model with the combined prompt
   const botString = botResponse.response.text();
