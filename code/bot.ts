@@ -177,7 +177,7 @@ async function postMessage(
   let usesById = <number>uses.get(request.sender_id);
   let body: PostBody = {
     bot_id: botID,
-    text: usesLogic(request.sender_id, usesById) + botResponse,
+    text: botResponse, //  usesLogic(request.sender_id, usesById) +
   };
 
   body.attachments = matches.length > 0 ? handlePhrase(matches[0]) : [];
@@ -189,9 +189,13 @@ async function postMessage(
     newResponse.candidates[0].content &&
     newResponse.candidates[0].content.parts
   ) {
+    let imgTxt = "";
+    let useText = false;
     for (const part of newResponse.candidates[0].content.parts) {
       // Based on the part type, either show the text or save the image
       if (part.text) {
+        imgTxt = part.text;
+        if (useText) body.text = imgTxt;
         console.log(part.text);
       } else if (part.inlineData && part.inlineData.data) {
         const imageData = part.inlineData.data;
@@ -205,6 +209,8 @@ async function postMessage(
             url: parsedResponse.payload.url,
           };
           body.attachments.push(newAttach);
+          body.text = imgTxt;
+          useText = true;
         }
       }
     }
