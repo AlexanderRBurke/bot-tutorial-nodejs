@@ -18,7 +18,7 @@ let uses = new Map<string, number>();
 let currentDay: number = new Date().getDay();
 let botID: string; // Declare botID outside the async function
 let ai: GoogleGenAI;
-let newResponse: GenerateContentResponse;
+let newResponse: GenerateContentResponse | undefined;
 
 async function initialize() {
   // Initialize everything that needs await
@@ -90,6 +90,7 @@ interface MessageBody {
 }
 
 async function respond(req: Request, res: Response) {
+  newResponse = undefined;
   if (currentDay != new Date().getDay()) {
     console.log("Reset uses map");
     uses.clear();
