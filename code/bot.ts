@@ -18,7 +18,6 @@ let uses = new Map<string, number>();
 let currentDay: number = new Date().getDay();
 let botID: string; // Declare botID outside the async function
 let ai: GoogleGenAI;
-let newResponse: GenerateContentResponse | undefined;
 
 async function initialize() {
   // Initialize everything that needs await
@@ -90,7 +89,6 @@ interface MessageBody {
 }
 
 async function respond(req: Request, res: Response) {
-  newResponse = undefined;
   if (currentDay != new Date().getDay()) {
     console.log("Reset uses map");
     uses.clear();
@@ -112,6 +110,7 @@ async function respond(req: Request, res: Response) {
     }
     const requestText = request.text;
     const AI_regex = /@bot/i;
+    const img_regex = /@img/i;
     if (AI_regex.test(requestText)) {
       if (model == undefined || model == null) {
         await initialize();
@@ -119,17 +118,94 @@ async function respond(req: Request, res: Response) {
 
       const result = await generateBotResponse(request.name, requestText);
       res.writeHead(200);
-      message = await postMessage(result, [], request);
+      message = await postMessage(result, request, []);
+
+      res.end(JSON.stringify(message));
+    } else if (img_regex.test(requestText)) {
+      if (ai == undefined) {
+        await initialize();
+      }
+      let newResponse: GenerateContentResponse | undefined;
+      const contents: any[] = [{ text: requestText.replaceAll("@img", "") }];
+      try {
+        console.log(JSON.stringify(request.attachments));
+        if (request.attachments.length > 0) {
+          const fetchModule = await import("node-fetch");
+          const fetch = fetchModule.default; // Access the default export
+
+          const imgResponse = await fetch(request.attachments[0].url);
+
+          if (!imgResponse.ok) {
+            throw new Error(
+              `Failed to fetch image: ${imgResponse.status} ${imgResponse.statusText}`
+            );
+          }
+
+          const buffer = await imgResponse.buffer();
+          const base64Image: string = buffer.toString("base64");
+          contents.push({
+            inlineData: {
+              mimeType: "image/png",
+              data: base64Image,
+            },
+          });
+        }
+
+        // Prepare the content parts
+        newResponse = await ai.models.generateContent({
+          model: "gemini-2.0-flash-exp-image-generation",
+          config: {
+            responseModalities: ["Text", "Image"],
+          },
+          contents: contents,
+        });
+      } catch (error) {
+        console.log("img oopsie: " + error);
+      }
+      let imgTxt = "";
+      let bodyAttachments = [];
+      if (newResponse?.candidates?.[0]?.content?.parts) {
+        for (const part of newResponse.candidates[0].content.parts) {
+          // Based on the part type, either show the text or save the image
+          if (part.text) {
+            imgTxt = part.text;
+          } else if (part.inlineData && part.inlineData.data) {
+            const imageData = part.inlineData.data;
+            const buffer = Buffer.from(imageData, "base64");
+            const responseImg = await uploadImage(buffer);
+            const parsedResponse = JSON.parse(responseImg);
+            if (parsedResponse.payload && parsedResponse.payload.url) {
+              let newAttach = {
+                type: "image",
+                url: parsedResponse.payload.url,
+              };
+              bodyAttachments.push(newAttach);
+            }
+          }
+        }
+      }
+
+      res.writeHead(200);
+      message = await postMessage(imgTxt, request, bodyAttachments);
 
       res.end(JSON.stringify(message));
     } else if (botRegex.test(requestText)) {
       // && getRandomInt(2) == 1
       res.writeHead(200);
-      const matches = requestText.match(regex);
+      let matches = regexpmatcharrayToStringArray(requestText.match(regex));
+      let botResponse = "";
+      if (matches[0] == "169") {
+        botResponse = cool();
+      } else {
+        for (let index = 0; index < matches.length; index++) {
+          const element = phrases[matches[index].toLowerCase()];
+          botResponse += element + " ";
+        }
+      }
       message = await postMessage(
-        "",
-        regexpmatcharrayToStringArray(matches),
-        request
+        botResponse,
+        request,
+        matches.length > 0 ? handlePhrase(matches[0]) : []
       );
 
       res.end(JSON.stringify(message));
@@ -155,19 +231,10 @@ interface PostBody {
 
 async function postMessage(
   botResponse: string,
-  matches: string[],
-  request: MessageBody
+  request: MessageBody,
+  attachments: any[]
 ) {
   var options, botReq;
-
-  if (matches[0] == "169") {
-    botResponse = cool();
-  } else {
-    for (let index = 0; index < matches.length; index++) {
-      const element = phrases[matches[index].toLowerCase()];
-      botResponse += element + " ";
-    }
-  }
 
   options = {
     hostname: "api.groupme.com",
@@ -179,43 +246,8 @@ async function postMessage(
   let body: PostBody = {
     bot_id: botID,
     text: botResponse, //  usesLogic(request.sender_id, usesById) +
+    attachments: attachments,
   };
-
-  body.attachments = matches.length > 0 ? handlePhrase(matches[0]) : [];
-
-  if (
-    newResponse &&
-    newResponse.candidates &&
-    newResponse.candidates[0] &&
-    newResponse.candidates[0].content &&
-    newResponse.candidates[0].content.parts
-  ) {
-    let imgTxt = "";
-    let useText = false;
-    for (const part of newResponse.candidates[0].content.parts) {
-      // Based on the part type, either show the text or save the image
-      if (part.text) {
-        imgTxt = part.text;
-        if (useText) body.text = imgTxt;
-        console.log(part.text);
-      } else if (part.inlineData && part.inlineData.data) {
-        const imageData = part.inlineData.data;
-        const buffer = Buffer.from(imageData, "base64");
-        const responseImg = await uploadImage(buffer);
-        const parsedResponse = JSON.parse(responseImg);
-        if (parsedResponse.payload && parsedResponse.payload.url) {
-          // console.log("Uploaded Image URL:", parsedResponse.payload.url);
-          let newAttach = {
-            type: "image",
-            url: parsedResponse.payload.url,
-          };
-          body.attachments.push(newAttach);
-          body.text = imgTxt;
-          useText = true;
-        }
-      }
-    }
-  }
 
   let isTest: boolean = request.name == "Test User";
   if (isTest != true) {
@@ -304,14 +336,6 @@ async function generateBotResponse(userId: string, userPrompt: string) {
     .join("\n");
 
   const fullPrompt = `Previous conversation:\n${context}\n\n${userId}:  ${userPrompt}`;
-
-  newResponse = await ai.models.generateContent({
-    model: "gemini-2.0-flash-exp-image-generation",
-    config: {
-      responseModalities: ["Text", "Image"],
-    },
-    contents: userPrompt,
-  });
 
   const botResponse = await model.generateContent(fullPrompt); // Call the model with the combined prompt
   const botString = botResponse.response.text();

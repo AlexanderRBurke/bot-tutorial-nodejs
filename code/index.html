@@ -17,6 +17,12 @@
         name="message"
         placeholder="Enter your message"
       />
+      <input
+        type="url"
+        id="imageURLInput"
+        name="imageURL"
+        placeholder="Enter image URL (optional)"
+      />
       <button type="submit">Send</button>
     </form>
     <div id="botResponse"></div>
@@ -44,9 +50,10 @@
       form.addEventListener("submit", (e) => {
         e.preventDefault();
         const message = document.getElementById("messageInput").value;
+        const imageURL = document.getElementById("imageURLInput").value;
 
         const requestData = {
-          attachments: [],
+          attachments: [{ url: imageURL }],
           avatar_url: "https://i.groupme.com/123456789", // Example URL
           created_at: Date.now() / 1000, // Current timestamp (seconds)
           group_id: "1234567890", // Example group ID
@@ -98,7 +105,7 @@
               imageDiv.appendChild(img); // Add to the new image div
             }
 
-            document.getElementById("messageInput").value = ""; // Clear input
+            // document.getElementById("messageInput").value = ""; // Clear input
           })
           .catch((error) => {
             console.error("Error:", error);
