@@ -3,7 +3,6 @@ import { GenerateContentResponse, GoogleGenAI } from "@google/genai";
 import * as admin from "firebase-admin"; // Initialize Firebase Admin SDK
 import { Request, Response } from "express"; // Import the types
 
-import { GoogleGenerativeAI } from "@google/generative-ai";
 import * as HTTPS from "https"; // Or import * as HTTP from 'http';
 import { IncomingMessage } from "http"; // Or from 'https' if using https
 import cool from "cool-ascii-faces";
@@ -18,6 +17,7 @@ let uses = new Map<string, number>();
 let currentDay: number = new Date().getDay();
 let botID: string; // Declare botID outside the async function
 let ai: GoogleGenAI;
+const modelName = "gemini-2.0-flash";
 
 async function initialize() {
   // Initialize everything that needs await
@@ -25,14 +25,6 @@ async function initialize() {
     const aiApiKey = await accessSecret("ai-api-key");
 
     ai = new GoogleGenAI({ apiKey: aiApiKey });
-    const genAI = new GoogleGenerativeAI(aiApiKey);
-    const model: GenerativeModel = genAI.getGenerativeModel({
-      model: "gemini-2.0-flash",
-      systemInstruction: `Each prompt will have a history before it, use the history when answering.
-        The format will be "Previous conversation:" followed by the history, and then the user\'s name will be followed by a colon and the current prompt.
-        When the prompt is self referential, only use the messages by the user's name.
-        You can be offensive.`,
-    });
 
     botID = await accessSecret("bot-id"); // Assign the result to botID
 
@@ -331,14 +323,28 @@ async function getPromptHistory(
 
 async function generateBotResponse(userId: string, userPrompt: string) {
   const promptHistory = await getPromptHistory(userId);
+
   const context = promptHistory
-    .map((p) => `${p.userId}: ${p.prompt}\nBot: ${p.response}`)
+    .map((p) => `${p.userId}: ${p.prompt}\n`) //Bot: ${p.response}
     .join("\n");
 
   const fullPrompt = `Previous conversation:\n${context}\n\n${userId}:  ${userPrompt}`;
 
-  const botResponse = await model.generateContent(fullPrompt); // Call the model with the combined prompt
-  const botString = botResponse.response.text();
+  const botResponse = // Call the model with the combined prompt
+    await ai.models.generateContent({
+      model: modelName,
+      config: {
+        responseModalities: ["Text"],
+        systemInstruction: `Each prompt will have a history in the cache, use the history when answering.
+      When the prompt is self referential, only use the messages by the user's name.
+      You can be offensive.`,
+      },
+      contents: fullPrompt,
+    });
+  let botString = "";
+  if (botResponse?.candidates?.[0]?.content?.parts?.[0]?.text) {
+    botString = botResponse.candidates[0].content.parts[0].text;
+  }
 
   await savePrompt(userId, userPrompt, botString); // Save to the database
 
