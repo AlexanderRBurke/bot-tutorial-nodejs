@@ -51,9 +51,12 @@
         e.preventDefault();
         const message = document.getElementById("messageInput").value;
         const imageURL = document.getElementById("imageURLInput").value;
-
+        let attachments = [];
+        if (imageURL != "") {
+          attachments = [{ url: imageURL }];
+        }
         const requestData = {
-          attachments: [{ url: imageURL }],
+          attachments: attachments,
           avatar_url: "https://i.groupme.com/123456789", // Example URL
           created_at: Date.now() / 1000, // Current timestamp (seconds)
           group_id: "1234567890", // Example group ID

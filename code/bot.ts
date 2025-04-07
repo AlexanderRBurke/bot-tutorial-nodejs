@@ -1,4 +1,3 @@
-import { GenerativeModel } from "@google/generative-ai";
 import { GenerateContentResponse, GoogleGenAI } from "@google/genai";
 import * as admin from "firebase-admin"; // Initialize Firebase Admin SDK
 import { Request, Response } from "express"; // Import the types
@@ -8,7 +7,6 @@ import { IncomingMessage } from "http"; // Or from 'https' if using https
 import cool from "cool-ascii-faces";
 // Import the secrets module.  The path should be relative to your main file.
 import { accessSecret } from "./secrets"; // No file extension needed for .js modules.
-import fs from "fs";
 require("dotenv").config();
 import { phrases, handlePhrase } from "./phrases";
 import { db } from "./index";
@@ -28,29 +26,12 @@ async function initialize() {
 
     botID = await accessSecret("bot-id"); // Assign the result to botID
 
-    return { model }; // Return the model so it's accessible
+    return;
   } catch (error) {
     console.error("Error initializing:", error);
     // Handle the error appropriately, perhaps exit the application
     throw error; // Re-throw so the error is caught when initialize is called.
   }
-}
-
-let model: GenerativeModel; // Declare model outside, will be set by initialize
-initialize()
-  .then(({ model: initializedModel }) => {
-    model = initializedModel; // Set the model once initialization is done
-  })
-  .catch((error) => {
-    console.error("Initialization failed:", error);
-    // Handle the error, maybe exit the process.
-    process.exit(1); // Example: Exit the process if initialization fails
-  });
-
-var beeString = fs.readFileSync("./beeMovie.txt").toString("utf-8");
-
-function getRandomInt(max: number) {
-  return Math.floor(Math.random() * max);
 }
 
 // Create the regex dynamically:
@@ -104,13 +85,43 @@ async function respond(req: Request, res: Response) {
     const AI_regex = /@bot/i;
     const img_regex = /@img/i;
     if (AI_regex.test(requestText)) {
-      if (model == undefined || model == null) {
+      if (ai == undefined) {
         await initialize();
       }
 
-      const result = await generateBotResponse(request.name, requestText);
+      const contents: any[] = [];
+      try {
+        if (request.attachments.length > 0) {
+          const fetchModule = await import("node-fetch");
+          const fetch = fetchModule.default; // Access the default export
+
+          const imgResponse = await fetch(request.attachments[0].url);
+
+          if (!imgResponse.ok) {
+            throw new Error(
+              `Failed to fetch image: ${imgResponse.status} ${imgResponse.statusText}`
+            );
+          }
+
+          const buffer = await imgResponse.buffer();
+          const base64Image: string = buffer.toString("base64");
+          contents.push({
+            inlineData: {
+              mimeType: "image/png",
+              data: base64Image,
+            },
+          });
+        }
+      } catch (error) {
+        console.log("attachment oopsie: " + error);
+      }
+      const result = await generateBotResponse(
+        request.name,
+        requestText.replaceAll("@bot", ""),
+        contents
+      );
       res.writeHead(200);
-      message = await postMessage(result, request, []);
+      message = await postMessage(result.text, request, result.attachments);
 
       res.end(JSON.stringify(message));
     } else if (img_regex.test(requestText)) {
@@ -119,8 +130,9 @@ async function respond(req: Request, res: Response) {
       }
       let newResponse: GenerateContentResponse | undefined;
       const contents: any[] = [{ text: requestText.replaceAll("@img", "") }];
+      let imgTxt = "";
+      let bodyAttachments = [];
       try {
-        console.log(JSON.stringify(request.attachments));
         if (request.attachments.length > 0) {
           const fetchModule = await import("node-fetch");
           const fetch = fetchModule.default; // Access the default export
@@ -151,11 +163,10 @@ async function respond(req: Request, res: Response) {
           },
           contents: contents,
         });
-      } catch (error) {
+      } catch (error: any) {
         console.log("img oopsie: " + error);
+        imgTxt = "AI image went boom boom";
       }
-      let imgTxt = "";
-      let bodyAttachments = [];
       if (newResponse?.candidates?.[0]?.content?.parts) {
         for (const part of newResponse.candidates[0].content.parts) {
           // Based on the part type, either show the text or save the image
@@ -321,34 +332,68 @@ async function getPromptHistory(
   }
 }
 
-async function generateBotResponse(userId: string, userPrompt: string) {
+type AIResponse = {
+  text: string;
+  attachments: any[];
+};
+
+async function generateBotResponse(
+  userId: string,
+  userPrompt: string,
+  contents: any[]
+): Promise<AIResponse> {
   const promptHistory = await getPromptHistory(userId);
 
   const context = promptHistory
     .map((p) => `${p.userId}: ${p.prompt}\n`) //Bot: ${p.response}
     .join("\n");
 
-  const fullPrompt = `Previous conversation:\n${context}\n\n${userId}:  ${userPrompt}`;
+  contents.push({
+    text: `Previous conversation:\n${context}\nCurrent prompt:${userId}:  ${userPrompt}`, //userPrompt,//
+  });
 
-  const botResponse = // Call the model with the combined prompt
-    await ai.models.generateContent({
-      model: modelName,
-      config: {
-        responseModalities: ["Text"],
-        systemInstruction: `Each prompt will have a history in the cache, use the history when answering.
-      When the prompt is self referential, only use the messages by the user's name.
-      You can be offensive.`,
-      },
-      contents: fullPrompt,
-    });
-  let botString = "";
-  if (botResponse?.candidates?.[0]?.content?.parts?.[0]?.text) {
-    botString = botResponse.candidates[0].content.parts[0].text;
+  try {
+    const botResponse = // Call the model with the combined prompt
+      await ai.models.generateContent({
+        model: modelName,
+        config: {
+          responseModalities: ["Text"],
+          systemInstruction: `Each prompt will have a history in the cache, use the history when answering.
+          When the prompt is self referential, only use the messages by the user's name.
+          You can be offensive.`,
+        },
+        contents: contents,
+      });
+    let botString = "";
+    let botAttachments = [];
+    if (botResponse?.candidates?.[0]?.content?.parts) {
+      for (const part of botResponse.candidates[0].content.parts) {
+        // Based on the part type, either show the text or save the image
+        if (part.text) {
+          botString = part.text;
+        } else if (part.inlineData && part.inlineData.data) {
+          console.log("ther eis an image");
+          const imageData = part.inlineData.data;
+          const buffer = Buffer.from(imageData, "base64");
+          const responseImg = await uploadImage(buffer);
+          const parsedResponse = JSON.parse(responseImg);
+          if (parsedResponse.payload && parsedResponse.payload.url) {
+            let newAttach = {
+              type: "image",
+              url: parsedResponse.payload.url,
+            };
+            botAttachments.push(newAttach);
+          }
+        }
+      }
+    }
+
+    await savePrompt(userId, userPrompt, botString); // Save to the database
+    return { text: botString, attachments: botAttachments };
+  } catch (error) {
+    console.log("AI oopsie: " + error);
+    return { text: "sorry AI failed", attachments: [] };
   }
-
-  await savePrompt(userId, userPrompt, botString); // Save to the database
-
-  return botString;
 }
 
 async function uploadImage(imageBuffer: Buffer<ArrayBuffer>): Promise<string> {
@@ -398,6 +443,33 @@ async function uploadImage(imageBuffer: Buffer<ArrayBuffer>): Promise<string> {
   } catch (error) {
     console.error("Error reading image file:", error);
     throw error;
+  }
+}
+
+async function deleteDocumentsByUserId(userIdToDelete: string) {
+  const promptsRef = db.collection("prompts");
+  const querySnapshot = await promptsRef
+    .where("userId", "==", userIdToDelete)
+    .get();
+
+  if (querySnapshot.empty) {
+    console.log("No documents found with the specified userId.");
+    return;
+  }
+
+  const batch = db.batch();
+  querySnapshot.forEach((doc) => {
+    // batch.delete(doc.ref);
+    console.log(
+      `Deleting document with ID: ${doc.id} and prompt: ${doc.get("prompt")}`
+    );
+  });
+
+  try {
+    await batch.commit();
+    console.log("Successfully deleted documents.");
+  } catch (error) {
+    console.error("Error deleting documents:", error);
   }
 }
 
