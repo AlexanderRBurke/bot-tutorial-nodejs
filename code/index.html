@@ -1,51 +1,150 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <title>Bot Tester</title>
+    <title>Bot Tester & Leaderboard</title>
     <link
       rel="stylesheet"
       href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
     />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <style>
+      /* Basic styling for tabs */
+      .tab {
+        overflow: hidden;
+        border: 1px solid #ccc;
+        background-color: #f1f1f1;
+      }
+      .tab button {
+        background-color: inherit;
+        float: left;
+        border: none;
+        outline: none;
+        cursor: pointer;
+        padding: 14px 16px;
+        transition: 0.3s;
+      }
+      .tab button:hover {
+        background-color: #ddd;
+      }
+      .tab button.active {
+        background-color: #ccc;
+      }
+      .tabcontent {
+        display: none;
+        padding: 6px 12px;
+        border: 1px solid #ccc;
+        border-top: none;
+      }
+      #Leaderboard {
+        /* Show Leaderboard tab content by default initially */
+        /* display: block; */ /* You can uncomment this if you want Leaderboard default */
+      }
+      #BotTester {
+        /* Show Bot Tester tab content by default */
+        display: block;
+      }
+      /* Style for leaderboard list */
+      #leaderboardContent ol {
+        list-style-type: decimal;
+        padding-left: 20px;
+      }
+      #leaderboardContent li {
+        margin-bottom: 10px;
+        border-bottom: 1px solid #eee;
+        padding-bottom: 5px;
+      }
+      #leaderboardContent li strong {
+        display: block; /* Name on its own line */
+      }
+      #leaderboardContent li span {
+        color: #1d1c1c;
+        font-size: 0.9em;
+      }
+      #leaderboardContent li img {
+        /* Style for leaderboard images */
+        max-width: 150px; /* Limit image width */
+        max-height: 150px; /* Limit image height */
+        display: block; /* Make image block-level */
+        margin-top: 5px; /* Add some space above the image */
+      }
+    </style>
   </head>
   <body>
-    <h1>Test Your Bot</h1>
-    <form id="messageForm" action="/" method="post">
-      <input
-        type="text"
-        id="messageInput"
-        name="message"
-        placeholder="Enter your message"
-      />
-      <input
-        type="url"
-        id="imageURLInput"
-        name="imageURL"
-        placeholder="Enter image URL (optional)"
-      />
-      <button type="submit">Send</button>
-    </form>
-    <div id="botResponse"></div>
-    <div id="imageDiv"></div>
-    <div id="mapDiv" style="height: 400px; width: 600px"></div>
+    <h1>GroupMe Tools</h1>
 
-    <!-- <h2>Add Phrase</h2>
-    <form id="addPhraseForm">
-      <label for="key">Key:</label><br />
-      <input type="text" id="key" name="key" /><br />
-      <label for="value">Value:</label><br />
-      <textarea id="value" name="value"></textarea><br /><br />
-      <button type="submit">Add Phrase</button>
-    </form>
+    <div class="tab">
+      <button class="tablinks active" onclick="openTab(event, 'BotTester')">
+        Bot Tester
+      </button>
+      <button class="tablinks" onclick="openTab(event, 'Leaderboard')">
+        Leaderboard
+      </button>
+    </div>
 
-    <h2>Phrases</h2>
-    <ul id="phrasesList"></ul> -->
+    <div id="BotTester" class="tabcontent">
+      <h2>Test Your Bot</h2>
+      <form id="messageForm" action="/" method="post">
+        <input
+          type="text"
+          id="messageInput"
+          name="message"
+          placeholder="Enter your message"
+        />
+        <input
+          type="url"
+          id="imageURLInput"
+          name="imageURL"
+          placeholder="Enter image URL (optional)"
+        />
+        <button type="submit">Send</button>
+      </form>
+      <div id="botResponse"></div>
+      <div id="imageDiv"></div>
+      <div id="mapDiv" style="height: 400px; width: 600px"></div>
+    </div>
 
+    <div id="Leaderboard" class="tabcontent">
+      <h2>Most Liked Messages (5+ Likes)</h2>
+      <label for="leaderboardPeriod">Time Period:</label>
+      <select id="leaderboardPeriod" onchange="fetchLeaderboard()">
+        <option value="week" selected>Last Week</option>
+        <option value="day">Last Day</option>
+        <option value="month">Last Month</option>
+      </select>
+      <hr />
+      <div id="leaderboardContent">
+        <p>
+          Select a period and click the 'Leaderboard' tab again or refresh to
+          load/update data.
+        </p>
+      </div>
+    </div>
     <script>
+      // --- Tab Handling ---
+      function openTab(evt, tabName) {
+        var i, tabcontent, tablinks;
+        tabcontent = document.getElementsByClassName("tabcontent");
+        for (i = 0; i < tabcontent.length; i++) {
+          tabcontent[i].style.display = "none";
+        }
+        tablinks = document.getElementsByClassName("tablinks");
+        for (i = 0; i < tablinks.length; i++) {
+          tablinks[i].className = tablinks[i].className.replace(" active", "");
+        }
+        document.getElementById(tabName).style.display = "block";
+        evt.currentTarget.className += " active";
+
+        // Fetch leaderboard data when the tab is opened
+        if (tabName === "Leaderboard") {
+          fetchLeaderboard();
+        }
+      }
+
+      // --- Bot Tester Logic (from original file) ---
       const form = document.getElementById("messageForm");
       const responseDiv = document.getElementById("botResponse");
       const imageDiv = document.getElementById("imageDiv");
-      const mapDiv = document.getElementById("mapDiv"); // Get the map container element
+      const mapDiv = document.getElementById("mapDiv");
 
       form.addEventListener("submit", (e) => {
         e.preventDefault();
@@ -53,7 +152,7 @@
         const imageURL = document.getElementById("imageURLInput").value;
         let attachments = [];
         if (imageURL != "") {
-          attachments = [{ url: imageURL }];
+          attachments = [{ url: imageURL, type: "image" }]; // Assuming type image for URL
         }
         const requestData = {
           attachments: attachments,
@@ -70,105 +169,168 @@
           user_id: "1234567890", // Example user ID
         };
 
-        console.log(requestData);
+        console.log("Sending bot test request:", requestData);
         fetch("/", {
           method: "POST",
           headers: { "Content-type": "application/json; charset=UTF-8" },
           body: JSON.stringify(requestData),
         })
-          .then((response) => response.text()) // Get the text response
-          .then((data) => {
-            var parsedData = JSON.parse(data);
-            console.error("parsedData:", parsedData);
-            responseDiv.textContent = parsedData.text; // Display it
-
-            var attachments = parsedData.attachments[0];
-            var type = attachments?.type;
-
-            if (type == "location") {
-              const lat = attachments.lat;
-              const lng = attachments.lng;
-              // Initialize the map (using mapDiv):
-              const map = L.map(mapDiv).setView([lat, lng], 13);
-
-              L.tileLayer(
-                "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
-                {
-                  attribution:
-                    'Map data &copy; <a href="https://www.openstreetmap.org/">OpenStreetMap</a> contributors',
-                  maxZoom: 18,
-                }
-              ).addTo(map);
-
-              L.marker([lat, lng]).addTo(map).bindPopup("Location");
-            } else if (type == "image") {
-              const img = document.createElement("img");
-              img.src = attachments.url;
-              img.alt = "Bot Image";
-              imageDiv.appendChild(img); // Add to the new image div
+          .then((response) => {
+            if (!response.ok) {
+              throw new Error(`HTTP error! status: ${response.status}`);
             }
+            // Check if response body is empty or not JSON
+            return response.text().then((text) => {
+              try {
+                return JSON.parse(text);
+              } catch (err) {
+                console.warn("Response was not valid JSON:", text);
+                return {
+                  text: "Received non-JSON response from bot backend.",
+                  attachments: [],
+                }; // Default object
+              }
+            });
+          })
+          .then((parsedData) => {
+            console.log("Parsed bot response:", parsedData);
+            responseDiv.textContent = parsedData.text || "No text in response."; // Display bot text
 
+            // Clear previous images/maps
+            imageDiv.innerHTML = "";
+            // Ideally, clear or update Leaflet map properly if it exists
+            // For simplicity, just clearing the container div
+            // mapDiv.innerHTML = ''; // This might break Leaflet if map instance isn't removed properly
+
+            if (parsedData.attachments && parsedData.attachments.length > 0) {
+              var attachment = parsedData.attachments[0]; // Process first attachment
+              var type = attachment?.type;
+
+              if (type == "location" && attachment.lat && attachment.lng) {
+                const lat = parseFloat(attachment.lat);
+                const lng = parseFloat(attachment.lng);
+                // Basic check if map already initialized (very basic)
+                if (!mapDiv._leaflet_id) {
+                  const map = L.map(mapDiv).setView([lat, lng], 13);
+                  L.tileLayer(
+                    "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+                    {
+                      attribution:
+                        'Map data &copy; <a href="https://www.openstreetmap.org/">OpenStreetMap</a> contributors',
+                      maxZoom: 18,
+                    }
+                  ).addTo(map);
+                  L.marker([lat, lng])
+                    .addTo(map)
+                    .bindPopup(attachment.name || "Location");
+                } else {
+                  // Update existing map view and marker if needed (more complex)
+                  console.log(
+                    "Map already exists. Update view/marker (not implemented)."
+                  );
+                }
+              } else if (type == "image" && attachment.url) {
+                const img = document.createElement("img");
+                img.src = attachment.url;
+                img.alt = "Bot Image";
+                img.style.maxWidth = "100%"; // Prevent large images breaking layout
+                img.style.height = "auto";
+                imageDiv.appendChild(img);
+              }
+            }
             // document.getElementById("messageInput").value = ""; // Clear input
           })
           .catch((error) => {
-            console.error("Error:", error);
+            console.error("Error during bot test fetch:", error);
             responseDiv.textContent =
-              "This phrase hasn't been added yet, please consult Alex Burke.";
+              "Error communicating with bot: " + error.message;
           });
       });
 
-      // // Add Phrase Form Handling
-      // const addPhraseForm = document.getElementById("addPhraseForm");
-      // addPhraseForm.addEventListener("submit", (e) => {
-      //   e.preventDefault();
+      // --- Leaderboard Fetch Logic ---
+      const leaderboardDiv = document.getElementById("leaderboardContent");
+      const periodSelect = document.getElementById("leaderboardPeriod");
 
-      //   const key = document.getElementById("key").value;
-      //   const value = document.getElementById("value").value;
+      async function fetchLeaderboard() {
+        const selectedPeriod = periodSelect.value;
+        const apiUrl = `/api/leaderboard?period=${selectedPeriod}`;
+        leaderboardDiv.innerHTML = `<p>Loading leaderboard for ${selectedPeriod}...</p>`;
 
-      //   console.log("Trying to add: " + key + " " + value);
-      //   fetch("/add_phrase", {
-      //     method: "POST",
-      //     headers: {
-      //       "Content-Type": "application/json",
-      //     },
-      //     body: JSON.stringify({ key, value }),
-      //   })
-      //     .then((response) => response.json())
-      //     .then((data) => {
-      //       console.log(data.message);
-      //       document.getElementById("key").value = "";
-      //       document.getElementById("value").value = "";
+        try {
+          const response = await fetch(apiUrl);
 
-      //       // Refresh phrase list after adding
-      //       fetchPhrases();
-      //     })
-      //     .catch((error) => {
-      //       console.error("Error:", error);
-      //     });
-      // });
+          if (!response.ok) {
+            // ... (error handling)
+            let errorDetails = `HTTP error! status: ${response.status}`;
+            try {
+              const errorJson = await response.json();
+              errorDetails += `: ${
+                errorJson.error || "Unknown backend error"
+              }. ${errorJson.details || ""}`;
+            } catch (e) {
+              /* Ignore */
+            }
+            throw new Error(errorDetails);
+          }
 
-      // // Function to fetch and display phrases
-      // function fetchPhrases() {
-      //   fetch("/phrases")
-      //     .then((response) => response.json())
-      //     .then((phrases) => {
-      //       const phrasesList = document.getElementById("phrasesList");
-      //       phrasesList.innerHTML = ""; // Clear previous list
-      //       for (const key in phrases) {
-      //         const li = document.createElement("li");
-      //         li.textContent = `${key}: ${phrases[key]}`;
-      //         phrasesList.appendChild(li);
-      //       }
-      //     })
-      //     .catch((error) => {
-      //       console.error("Error fetching phrases:", error);
-      //     });
-      // }
+          const data = await response.json();
 
-      // // Fetch phrases on page load
-      // window.addEventListener("DOMContentLoaded", () => {
-      //   fetchPhrases();
-      // });
+          if (data && data.messages) {
+            const messagesToDisplay = data.messages;
+
+            if (messagesToDisplay.length === 0) {
+              leaderboardDiv.innerHTML = `<p>No messages found with 5 or more likes for the selected period.</p>`;
+              return;
+            }
+
+            let htmlContent = "<ol>";
+            messagesToDisplay.forEach((message) => {
+              // Process each message from the backend
+              const safeText = (message.text || "")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;");
+              const userName = (message.name || "Unknown User")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;");
+              const likeCount = message.favorited_by?.length || 0;
+
+              // --- NEW: Add image if imageUrl exists ---
+              let imageHtml = ""; // Variable to hold the image tag HTML
+              if (message.imageUrl) {
+                // Check if the message object has an imageUrl
+                // Basic HTML escaping for the URL attribute just in case
+                const safeImageUrl = message.imageUrl.replace(/"/g, "&quot;");
+                imageHtml = `<img src="${safeImageUrl}" alt="Attachment from ${userName}">`;
+              }
+              // --- END NEW ---
+
+              htmlContent += `
+                            <li>
+                                <strong>${userName}</strong> (${likeCount} likes):
+                                <span>${safeText || "[No Text Content]"}</span>
+                                ${imageHtml} 
+                             </li>`;
+            });
+            htmlContent += "</ol>";
+            leaderboardDiv.innerHTML = htmlContent;
+          } else {
+            leaderboardDiv.innerHTML =
+              "<p>Could not retrieve leaderboard data or format is incorrect.</p>";
+            console.warn("Received data format unexpected from backend:", data);
+          }
+        } catch (error) {
+          console.error("Error fetching or processing leaderboard:", error);
+          leaderboardDiv.innerHTML = `<p>Error loading leaderboard: ${error.message}. Check server logs for details.</p>`;
+        }
+      }
+
+      // ... (Optional: DOMContentLoaded listener) ...
+      window.addEventListener("DOMContentLoaded", () => {
+        const leaderboardTab = document.getElementById("Leaderboard");
+        if (leaderboardTab && leaderboardTab.style.display === "block") {
+          fetchLeaderboard();
+        }
+      });
     </script>
   </body>
 </html>

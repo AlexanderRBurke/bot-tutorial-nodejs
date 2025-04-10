@@ -1,6 +1,6 @@
 import express, { Request, Response } from "express"; // Import the types
 import { QuerySnapshot, QueryDocumentSnapshot } from "firebase/firestore";
-import * as admin from 'firebase-admin';
+import * as admin from "firebase-admin";
 
 const bot = require("./bot");
 import { phrases, handlePhrase } from "./phrases";
@@ -13,6 +13,64 @@ app.use(express.urlencoded({ extended: true }));
 app.post("/", bot.respond); // Bot interaction
 // app.post("/add_phrase", addPhrase); // Add phrase route
 // app.get("/phrases", getPhrases); // Get phrases route
+app.get("/api/leaderboard", async (req: Request, res: Response) => {
+  const period =
+    req.query.period === "day" || req.query.period === "month"
+      ? req.query.period
+      : "week";
+  try {
+    const leaderboardResponse = await bot.fetchLeaderboardData(period);
+
+    if (leaderboardResponse && leaderboardResponse.messages) {
+      // Filter messages server-side
+      const filteredMessages = leaderboardResponse.messages.filter(
+        (message: any) =>
+          Array.isArray(message.favorited_by) &&
+          message.favorited_by.length >= 5
+      );
+
+      // Sort server-side
+      filteredMessages.sort(
+        (a: any, b: any) => b.favorited_by.length - a.favorited_by.length
+      );
+
+      // --- NEW: Extract image URL ---
+      const messagesWithImages = filteredMessages.map((message: any) => {
+        let imageUrl = null;
+        if (message.attachments && message.attachments.length > 0) {
+          const imageAttachment = message.attachments.find(
+            (att: any) => att.type === "image"
+          );
+          if (imageAttachment) {
+            imageUrl = imageAttachment.url;
+          }
+        }
+        // Return a new object including the original message data and the imageUrl
+        return {
+          ...message, // Spread existing message properties
+          imageUrl: imageUrl, // Add the imageUrl property
+        };
+      });
+
+      // Send back the modified messages array
+      res.json({ messages: messagesWithImages }); // <-- Use messagesWithImages here
+    } else {
+      console.warn(
+        "Leaderboard response format unexpected:",
+        leaderboardResponse
+      );
+      res
+        .status(500)
+        .json({ error: "Unexpected response format from GroupMe API." });
+    }
+  } catch (error: any) {
+    console.error("Error in /api/leaderboard endpoint:", error);
+    res.status(500).json({
+      error: "Failed to fetch leaderboard data.",
+      details: error.message,
+    });
+  }
+});
 
 // Serve static files from the "code" directory
 app.use(express.static(__dirname + "/code"));

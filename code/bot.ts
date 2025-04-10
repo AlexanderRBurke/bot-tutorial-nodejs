@@ -472,4 +472,69 @@ async function deleteDocumentsByUserId(userIdToDelete: string) {
   }
 }
 
+export async function fetchLeaderboardData(
+  period: "day" | "week" | "month" = "week"
+): Promise<any> {
+  const groupId = process.env.GROUP_ID;
+  const accessToken = process.env.GROUPME_KEY;
+
+  if (!groupId || !accessToken) {
+    console.error(
+      "Error: GROUPME_GROUP_ID or GROUPME_ACCESS_TOKEN environment variables missing."
+    );
+    throw new Error("Missing GroupMe API configuration on server.");
+  }
+
+  const options: HTTPS.RequestOptions = {
+    hostname: "api.groupme.com",
+    path: `/v3/groups/${groupId}/likes?period=${period}`,
+    method: "GET",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Access-Token": accessToken,
+    },
+  };
+
+  console.log(
+    `Workspaceing leaderboard for group ${groupId}, period ${period}`
+  );
+
+  return new Promise((resolve, reject) => {
+    const req = HTTPS.request(options, (res: IncomingMessage) => {
+      let data = "";
+      res.on("data", (chunk) => {
+        data += chunk;
+      });
+      res.on("end", () => {
+        if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
+          try {
+            const jsonData = JSON.parse(data);
+            // The API response structure has messages under a 'response' key
+            resolve(jsonData.response);
+          } catch (e) {
+            console.error("Error parsing GroupMe leaderboard response:", e);
+            console.error("Raw response data:", data);
+            reject(new Error("Failed to parse leaderboard data from GroupMe."));
+          }
+        } else {
+          console.error(`GroupMe API error: Status Code ${res.statusCode}`);
+          console.error("Raw response data:", data); // Log the raw error response
+          reject(
+            new Error(
+              `GroupMe API request failed with status ${res.statusCode}. Check Group ID and Access Token.`
+            )
+          );
+        }
+      });
+    });
+
+    req.on("error", (error) => {
+      console.error("Error making HTTPS request to GroupMe:", error);
+      reject(new Error("Failed to connect to GroupMe API."));
+    });
+
+    req.end();
+  });
+}
+
 exports.respond = respond;
