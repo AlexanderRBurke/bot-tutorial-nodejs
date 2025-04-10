@@ -67,6 +67,28 @@
         display: block; /* Make image block-level */
         margin-top: 5px; /* Add some space above the image */
       }
+      #allTimeLeaderboardContent ol {
+        list-style-type: decimal;
+        padding-left: 20px;
+      }
+      #allTimeLeaderboardContent li {
+        margin-bottom: 10px;
+        border-bottom: 1px solid #eee;
+        padding-bottom: 5px;
+      }
+      #allTimeLeaderboardContent li strong {
+        display: block;
+      }
+      #allTimeLeaderboardContent li span {
+        color: #1d1c1c;
+        font-size: 0.9em;
+      }
+      #allTimeLeaderboardContent li img {
+        max-width: 150px;
+        max-height: 150px;
+        display: block;
+        margin-top: 5px;
+      }
     </style>
   </head>
   <body>
@@ -78,6 +100,9 @@
       </button>
       <button class="tablinks" onclick="openTab(event, 'Leaderboard')">
         Leaderboard
+      </button>
+      <button class="tablinks" onclick="openTab(event, 'AllTimeLeaderboard')">
+        All-Time Leaderboard
       </button>
     </div>
 
@@ -119,6 +144,13 @@
         </p>
       </div>
     </div>
+
+    <div id="AllTimeLeaderboard" class="tabcontent">
+      <h2>Most Liked Messages (6+ Likes) - All Time</h2>
+      <div id="allTimeLeaderboardContent">
+        <p>Loading all-time most liked messages... This may take a while.</p>
+      </div>
+    </div>
     <script>
       // --- Tab Handling ---
       function openTab(evt, tabName) {
@@ -137,6 +169,8 @@
         // Fetch leaderboard data when the tab is opened
         if (tabName === "Leaderboard") {
           fetchLeaderboard();
+        } else if (tabName === "AllTimeLeaderboard") {
+          fetchAllTimeLeaderboard();
         }
       }
 
@@ -194,7 +228,7 @@
           })
           .then((parsedData) => {
             console.log("Parsed bot response:", parsedData);
-            responseDiv.textContent = parsedData.text || "No text in response."; // Display bot text
+            responseDiv.textContent = parsedData.text || ""; // Display bot text
 
             // Clear previous images/maps
             imageDiv.innerHTML = "";
@@ -294,7 +328,6 @@
                 .replace(/>/g, "&gt;");
               const likeCount = message.favorited_by?.length || 0;
 
-              // --- NEW: Add image if imageUrl exists ---
               let imageHtml = ""; // Variable to hold the image tag HTML
               if (message.imageUrl) {
                 // Check if the message object has an imageUrl
@@ -302,14 +335,13 @@
                 const safeImageUrl = message.imageUrl.replace(/"/g, "&quot;");
                 imageHtml = `<img src="${safeImageUrl}" alt="Attachment from ${userName}">`;
               }
-              // --- END NEW ---
 
               htmlContent += `
-                            <li>
-                                <strong>${userName}</strong> (${likeCount} likes):
-                                <span>${safeText || "[No Text Content]"}</span>
-                                ${imageHtml} 
-                             </li>`;
+                                        <li>
+                                                <strong>${userName}</strong> (${likeCount} likes):
+                                                <span>${safeText || ""}</span>
+                                                ${imageHtml}
+                                        </li>`;
             });
             htmlContent += "</ol>";
             leaderboardDiv.innerHTML = htmlContent;
@@ -324,7 +356,79 @@
         }
       }
 
-      // ... (Optional: DOMContentLoaded listener) ...
+      // --- All-Time Leaderboard Fetch Logic ---
+      const allTimeLeaderboardDiv = document.getElementById(
+        "allTimeLeaderboardContent"
+      );
+      let allMessages = [];
+      let fetching = false;
+      let after_id = null;
+
+      async function fetchAllTimeLeaderboard() {
+        if (fetching) return;
+        fetching = true;
+        allTimeLeaderboardDiv.innerHTML = `<p>Loading all-time most liked messages... This may take a while.</p>`;
+        allMessages = [];
+        after_id = null;
+
+        try {
+          // Call the new backend endpoint
+          const response = await fetch("/api/allTimeLeaderboard");
+          if (!response.ok) {
+            throw new Error(
+              `Failed to fetch all-time leaderboard: ${response.status} ${response.statusText}`
+            );
+          }
+          const data = await response.json();
+
+          if (data && data.messages) {
+            displayAllTimeLeaderboard(data.messages);
+          } else {
+            allTimeLeaderboardDiv.innerHTML =
+              "<p>Could not retrieve all-time leaderboard data.</p>";
+            console.warn("Unexpected response:", data);
+          }
+        } catch (error) {
+          console.error("Error fetching all-time leaderboard:", error);
+          allTimeLeaderboardDiv.innerHTML = `<p>Error loading all-time leaderboard: ${error.message}</p>`;
+        } finally {
+          fetching = false;
+        }
+      }
+
+      function displayAllTimeLeaderboard(messages) {
+        if (messages.length === 0) {
+          allTimeLeaderboardDiv.innerHTML =
+            "<p>No messages found with 6 or more likes in the group's history.</p>";
+          return;
+        }
+
+        let htmlContent = "<ol>";
+        messages.forEach((message) => {
+          const safeText = (message.text || "")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;");
+          const userName = (message.name || "Unknown User")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;");
+          const likeCount = message.favorited_by?.length || 0;
+          let imageHtml = "";
+          if (message.attachments.length > 0 && message.attachments[0].url) {
+            const safeImageUrl = message.attachments[0].url;
+            imageHtml = `<img src="${safeImageUrl}" alt="Attachment from ${userName}">`;
+          }
+
+          htmlContent += `
+                        <li>
+                                <strong>${userName}</strong> (${likeCount} likes):
+                                <span>${safeText || ""}</span>
+                                ${imageHtml}
+                        </li>`;
+        });
+        htmlContent += "</ol>";
+        allTimeLeaderboardDiv.innerHTML = htmlContent;
+      }
+
       window.addEventListener("DOMContentLoaded", () => {
         const leaderboardTab = document.getElementById("Leaderboard");
         if (leaderboardTab && leaderboardTab.style.display === "block") {

@@ -537,4 +537,158 @@ export async function fetchLeaderboardData(
   });
 }
 
+interface GroupMeMessage {
+  id: string;
+  text?: string;
+  name?: string;
+  favorited_by: string[];
+  attachments?: any[];
+  created_at: number;
+}
+
+/**
+ * Fetches messages from the GroupMe API for a specific group, handling pagination.
+ * @param groupId The ID of the GroupMe group.
+ * @param accessToken The GroupMe API access token.
+ * @param beforeId (Optional) The ID of the message to fetch messages after.
+ * @returns A promise that resolves to an array of GroupMeMessage objects.
+ */
+export async function fetchGroupMeMessages(
+  groupId: string,
+  accessToken: string,
+  beforeId?: string
+): Promise<GroupMeMessage[]> {
+  const limit = 100; // Max per request
+  let url = `/v3/groups/${groupId}/messages?limit=${limit}`;
+  if (beforeId) {
+    url += `&before_id=${beforeId}`;
+  }
+
+  const options: HTTPS.RequestOptions = {
+    hostname: "api.groupme.com",
+    path: url,
+    method: "GET",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Access-Token": accessToken,
+    },
+  };
+
+  const response: any = await new Promise((resolve, reject) => {
+    const req = HTTPS.request(options, (res: IncomingMessage) => {
+      let data = "";
+      res.on("data", (chunk: any) => {
+        data += chunk;
+      });
+      res.on("end", () => {
+        if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
+          try {
+            const jsonData = JSON.parse(data);
+            // The API response structure has messages under a 'response' key
+            resolve(jsonData.response);
+          } catch (e) {
+            console.error("Error parsing GroupMe message response:", e);
+            console.error("Raw response data:", data);
+            reject(new Error("Failed to parse message data from GroupMe."));
+          }
+        } else {
+          console.error(`GroupMe API error: Status Code ${res.statusCode}`);
+          console.error("Raw response data:", data); // Log the raw error response
+          reject(
+            new Error(
+              `GroupMe API request failed with status ${res.statusCode}. Check Group ID and Access Token.`
+            )
+          );
+        }
+      });
+      res.on("error", (err) => {
+        reject(err); // Reject on any error
+      });
+    });
+
+    req.on("error", (error) => {
+      console.error("Error making HTTPS request to GroupMe:", error);
+      reject(new Error("Failed to connect to GroupMe API."));
+    });
+
+    req.end();
+  });
+
+  if (!response) {
+    throw new Error(`GroupMe API error:  No Response.`);
+  }
+  const data: any = response;
+
+  if (data && data.messages && Array.isArray(data.messages)) {
+    console.log("data.messages len: " + data.messages.length);
+    // Map the API response to the GroupMeMessage interface
+    return data.messages.map((message: any) => ({
+      id: message.id,
+      text: message.text,
+      name: message.name,
+      favorited_by: message.favorited_by || [],
+      attachments: message.attachments,
+      created_at: message.created_at,
+    }));
+  }
+  return [];
+}
+
+/**
+ * Retrieves all messages from a GroupMe group, handling pagination.
+ * @param groupId The ID of the GroupMe group.
+ * @param accessToken The GroupMe API access token.
+ * @returns A promise that resolves to an array of all GroupMeMessage objects for the group.
+ */
+export async function getAllGroupMeMessages(
+  groupId: string,
+  accessToken: string
+): Promise<GroupMeMessage[]> {
+  let allMessages: GroupMeMessage[] = [];
+  let beforeId: string | undefined; //  = "0"
+  let hasMore = true;
+  let rateLimit = 0;
+
+  while (hasMore && 10 > rateLimit++) {
+    const newMessages = await fetchGroupMeMessages(
+      groupId,
+      accessToken,
+      beforeId
+    );
+    if (newMessages.length > 0) {
+      allMessages = allMessages.concat(newMessages);
+      beforeId = newMessages[newMessages.length - 1].id;
+      console.log("beforeId: " + beforeId);
+    } else {
+      hasMore = false;
+    }
+    // Add a delay to be nice to the GroupMe API (consider a backoff strategy)
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  return allMessages;
+}
+
+/**
+ * Filters and sorts messages to get the most liked ones (6+ likes).
+ * @param messages An array of GroupMeMessage objects.
+ * @returns An array of the most liked messages, sorted by like count.
+ */
+export function filterAndSortMostLikedMessages(
+  messages: GroupMeMessage[]
+): GroupMeMessage[] {
+  let filtered = messages.filter((message) => {
+    return message.favorited_by && message.favorited_by.length >= 6;
+  });
+  if (filtered.length == 0) {
+    filtered = messages.filter((message) => {
+      return message.favorited_by && message.favorited_by.length >= 5;
+    });
+  }
+  console.log("fileter: " + filtered.length);
+  filtered.sort(
+    (a, b) => (b.favorited_by?.length || 0) - (a.favorited_by?.length || 0)
+  );
+  return filtered;
+}
+
 exports.respond = respond;

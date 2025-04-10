@@ -1,9 +1,9 @@
-import express, { Request, Response } from "express"; // Import the types
-import { QuerySnapshot, QueryDocumentSnapshot } from "firebase/firestore";
+import express, { Request, Response } from "express";
 import * as admin from "firebase-admin";
 
-const bot = require("./bot");
-import { phrases, handlePhrase } from "./phrases";
+const bot = require("./bot"); // Import your bot logic
+import { phrases, handlePhrase } from "./phrases"; // Import your phrases
+import { log } from "console";
 
 const app = express(); // Create an Express app
 app.use(express.json()); // Enable parsing JSON request bodies
@@ -13,8 +13,9 @@ app.use(express.urlencoded({ extended: true }));
 app.post("/", bot.respond); // Bot interaction
 // app.post("/add_phrase", addPhrase); // Add phrase route
 // app.get("/phrases", getPhrases); // Get phrases route
+
 app.get("/api/leaderboard", async (req: Request, res: Response) => {
-  const period =
+  const period: "day" | "week" | "month" =
     req.query.period === "day" || req.query.period === "month"
       ? req.query.period
       : "week";
@@ -53,7 +54,7 @@ app.get("/api/leaderboard", async (req: Request, res: Response) => {
       });
 
       // Send back the modified messages array
-      res.json({ messages: messagesWithImages }); // <-- Use messagesWithImages here
+      res.json({ messages: messagesWithImages });
     } else {
       console.warn(
         "Leaderboard response format unexpected:",
@@ -72,7 +73,34 @@ app.get("/api/leaderboard", async (req: Request, res: Response) => {
   }
 });
 
-// Serve static files from the "code" directory
+app.get("/api/allTimeLeaderboard", async (req: Request, res: Response) => {
+  log("allTimeLeaderboard");
+  const groupId = process.env.GROUP_ID;
+  const accessToken = process.env.GROUPME_KEY;
+
+  if (!groupId || !accessToken) {
+    res.status(500).json({
+      error:
+        "Missing GROUPME_GROUP_ID or GROUPME_ACCESS_TOKEN in environment variables.",
+    });
+    return;
+  }
+
+  try {
+    const allMessages = await bot.getAllGroupMeMessages(groupId, accessToken);
+    console.log("allMessages len: " + allMessages.length);
+    const mostLiked = bot.filterAndSortMostLikedMessages(allMessages);
+    res.json({ messages: mostLiked });
+  } catch (error: any) {
+    console.error("Error fetching all-time leaderboard:", error);
+    res.status(500).json({
+      error: "Failed to fetch all-time leaderboard data.",
+      details: error.message,
+    });
+  }
+});
+
+// Serve static files
 app.use(express.static(__dirname + "/code"));
 
 // Explicit route for index.html (if needed) - only if express.static does not work
@@ -80,12 +108,14 @@ app.get("/", (req: Request, res: Response) => {
   res.sendFile(__dirname + "/index.html"); // Use res.sendFile
 });
 
+// --- Server Startup ---
 const port = Number(process.env.PORT || 5000);
-app.listen(port, "0.0.0.0", function () {
+app.listen(port, "0.0.0.0", () => {
   console.log(`Server listening on port ${port}`);
   // populatePhrases(); // Call populatePhrases after the server starts
 });
 
+// Initialize Firebase Admin SDK
 var serviceAccount = require("../" + process.env.FIREBASE_SERVICE_ACCOUNT_KEY);
 
 admin.initializeApp({
@@ -106,7 +136,6 @@ async function addPhrase(req: Request, res: Response) {
     console.error("Error adding phrase:", error);
     res.status(500).json({ error: "Error adding phrase" });
   }
-  // });
 }
 
 interface Phrase {
