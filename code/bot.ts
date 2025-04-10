@@ -70,21 +70,21 @@ async function respond(req: Request, res: Response) {
   const request: MessageBody = req.body; // Access request body using req.body (Express),
   const botRegex: RegExp = regex;
   let message: PostBody;
-  if (request?.name != "RoN Bot" && request.text) {
+  if (request.text) {
     if (!uses.has(request.sender_id)) {
       uses.set(request.sender_id, 0);
     }
 
-    if (<number>uses.get(request.sender_id) > 5) {
-      console.log("Too many uses from: " + request.name);
-      // res.writeHead(200);
-      // res.end();
-      // return;
-    }
+    // if (<number>uses.get(request.sender_id) > 5) {
+    //   console.log("Too many uses from: " + request.name);
+    //   // res.writeHead(200);
+    //   // res.end();
+    //   // return;
+    // }
     const requestText = request.text;
     const AI_regex = /@bot/i;
     const img_regex = /@img/i;
-    if (AI_regex.test(requestText)) {
+    if (request?.name != "RoN Bot" && AI_regex.test(requestText)) {
       if (ai == undefined) {
         await initialize();
       }
@@ -124,6 +124,7 @@ async function respond(req: Request, res: Response) {
       message = await postMessage(result.text, request, result.attachments);
 
       res.end(JSON.stringify(message));
+      return;
     } else if (img_regex.test(requestText)) {
       if (ai == undefined) {
         await initialize();
@@ -190,9 +191,9 @@ async function respond(req: Request, res: Response) {
 
       res.writeHead(200);
       message = await postMessage(imgTxt, request, bodyAttachments);
-
       res.end(JSON.stringify(message));
-    } else if (botRegex.test(requestText)) {
+      return;
+    } else if (request?.name != "RoN Bot" && botRegex.test(requestText)) {
       // && getRandomInt(2) == 1
       res.writeHead(200);
       let matches = regexpmatcharrayToStringArray(requestText.match(regex));
@@ -217,13 +218,11 @@ async function respond(req: Request, res: Response) {
       res.writeHead(200);
       res.end();
     }
-  } else {
-    console.log(
-      "don't care about: " + request.text + ", from: " + request.name
-    );
-    res.writeHead(200);
-    res.end();
+    return;
   }
+  console.log("don't care about: " + request.text + ", from: " + request.name);
+  res.writeHead(200);
+  res.end();
 }
 
 interface PostBody {
