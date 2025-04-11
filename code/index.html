@@ -418,12 +418,31 @@
             imageHtml = `<img src="${safeImageUrl}" alt="Attachment from ${userName}">`;
           }
 
+          // Convert timestamp to Date object (assuming message.created_at is in Unix seconds)
+          const createdAtTimestamp = message.created_at;
+          let formattedTimeEST = "";
+          if (typeof createdAtTimestamp === "number") {
+            const createdAtDate = new Date(createdAtTimestamp * 1000);
+            formattedTimeEST = createdAtDate.toLocaleString("en-US", {
+              timeZone: "America/New_York", // EST Time Zone
+              year: "numeric",
+              month: "numeric",
+              day: "numeric",
+              hour: "numeric",
+              minute: "numeric",
+              second: "numeric",
+              timeZoneName: "short",
+            });
+          } else {
+            formattedTimeEST = "N/A"; // Handle cases where timestamp is missing or invalid
+          }
+
           htmlContent += `
-                        <li>
-                                <strong>${userName}</strong> (${likeCount} likes):
-                                <span>${safeText || ""}</span>
-                                ${imageHtml}
-                        </li>`;
+              <li>
+                  <strong>${userName}</strong> (${likeCount} likes) - Posted on: ${formattedTimeEST}:
+                  <span>${safeText || ""}</span>
+                  ${imageHtml}
+              </li>`;
         });
         htmlContent += "</ol>";
         allTimeLeaderboardDiv.innerHTML = htmlContent;

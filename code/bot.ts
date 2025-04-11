@@ -10,6 +10,7 @@ import { accessSecret } from "./secrets"; // No file extension needed for .js mo
 require("dotenv").config();
 import { phrases, handlePhrase } from "./phrases";
 import { db } from "./index";
+import * as fs from "fs";
 
 let uses = new Map<string, number>();
 let currentDay: number = new Date().getDay();
@@ -537,7 +538,7 @@ export async function fetchLeaderboardData(
   });
 }
 
-interface GroupMeMessage {
+export interface GroupMeMessage {
   id: string;
   text?: string;
   name?: string;
@@ -550,18 +551,18 @@ interface GroupMeMessage {
  * Fetches messages from the GroupMe API for a specific group, handling pagination.
  * @param groupId The ID of the GroupMe group.
  * @param accessToken The GroupMe API access token.
- * @param beforeId (Optional) The ID of the message to fetch messages after.
+ * @param afterId (Optional) The ID of the message to fetch messages after.
  * @returns A promise that resolves to an array of GroupMeMessage objects.
  */
 export async function fetchGroupMeMessages(
   groupId: string,
   accessToken: string,
-  beforeId?: string
+  afterId?: string
 ): Promise<GroupMeMessage[]> {
   const limit = 100; // Max per request
   let url = `/v3/groups/${groupId}/messages?limit=${limit}`;
-  if (beforeId) {
-    url += `&before_id=${beforeId}`;
+  if (afterId) {
+    url += `&after_id=${afterId}`;
   }
 
   const options: HTTPS.RequestOptions = {
@@ -634,6 +635,8 @@ export async function fetchGroupMeMessages(
   return [];
 }
 
+const LAST_MESSAGE_ID_FILE = "last_message_id.txt";
+
 /**
  * Retrieves all messages from a GroupMe group, handling pagination.
  * @param groupId The ID of the GroupMe group.
@@ -645,20 +648,43 @@ export async function getAllGroupMeMessages(
   accessToken: string
 ): Promise<GroupMeMessage[]> {
   let allMessages: GroupMeMessage[] = [];
-  let beforeId: string | undefined; //  = "0"
+  let afterId: string | undefined = "0";
   let hasMore = true;
   let rateLimit = 0;
 
-  while (hasMore && 10 > rateLimit++) {
+  // Load the last processed message ID from the file
+  try {
+    if (fs.existsSync(LAST_MESSAGE_ID_FILE)) {
+      afterId = fs.readFileSync(LAST_MESSAGE_ID_FILE, "utf8").trim();
+      console.log(`Resuming from afterId: ${afterId}`);
+    } else {
+      console.log(`Starting from the beginning`);
+    }
+  } catch (error) {
+    console.error("Error reading last message ID:", error);
+    // Continue without a stored ID, which is fine, but might re-process messages.
+  }
+
+  while (hasMore && 100 > rateLimit++) {
     const newMessages = await fetchGroupMeMessages(
       groupId,
       accessToken,
-      beforeId
+      afterId
     );
     if (newMessages.length > 0) {
       allMessages = allMessages.concat(newMessages);
-      beforeId = newMessages[newMessages.length - 1].id;
-      console.log("beforeId: " + beforeId);
+      const lastMessageId = newMessages[newMessages.length - 1].id;
+      afterId = lastMessageId;
+      console.log("afterId: " + afterId);
+
+      // Store the last processed message ID to a file
+      try {
+        fs.writeFileSync(LAST_MESSAGE_ID_FILE, lastMessageId);
+        console.log(`Stored lastMessageId: ${lastMessageId}`);
+      } catch (error) {
+        console.error("Error writing last message ID:", error);
+        // Handle the error, e.g., log it or throw an exception.  Important.
+      }
     } else {
       hasMore = false;
     }
@@ -679,11 +705,11 @@ export function filterAndSortMostLikedMessages(
   let filtered = messages.filter((message) => {
     return message.favorited_by && message.favorited_by.length >= 6;
   });
-  if (filtered.length == 0) {
-    filtered = messages.filter((message) => {
-      return message.favorited_by && message.favorited_by.length >= 5;
-    });
-  }
+  // if (filtered.length == 0) {
+  //   filtered = messages.filter((message) => {
+  //     return message.favorited_by && message.favorited_by.length >= 5;
+  //   });
+  // }
   console.log("fileter: " + filtered.length);
   filtered.sort(
     (a, b) => (b.favorited_by?.length || 0) - (a.favorited_by?.length || 0)

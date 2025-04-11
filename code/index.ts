@@ -4,6 +4,8 @@ import * as admin from "firebase-admin";
 const bot = require("./bot"); // Import your bot logic
 import { phrases, handlePhrase } from "./phrases"; // Import your phrases
 import { log } from "console";
+import { GroupMeMessage } from "./bot";
+import * as fs from "fs";
 
 const app = express(); // Create an Express app
 app.use(express.json()); // Enable parsing JSON request bodies
@@ -73,6 +75,7 @@ app.get("/api/leaderboard", async (req: Request, res: Response) => {
   }
 });
 
+const FILTERED_MESSAGES_FILE = "most_liked_messages.json"; // File to store most liked messages
 app.get("/api/allTimeLeaderboard", async (req: Request, res: Response) => {
   log("allTimeLeaderboard");
   const groupId = process.env.GROUP_ID;
@@ -87,10 +90,47 @@ app.get("/api/allTimeLeaderboard", async (req: Request, res: Response) => {
   }
 
   try {
-    const allMessages = await bot.getAllGroupMeMessages(groupId, accessToken);
-    console.log("allMessages len: " + allMessages.length);
-    const mostLiked = bot.filterAndSortMostLikedMessages(allMessages);
-    res.json({ messages: mostLiked });
+    // const allMessages: GroupMeMessage[] = await bot.getAllGroupMeMessages(
+    //   groupId,
+    //   accessToken
+    // );
+    // console.log("allMessages len: " + allMessages.length);
+    // const mostLiked: GroupMeMessage[] =
+    //   bot.filterAndSortMostLikedMessages(allMessages);
+    // // Store the most liked messages to a file
+    // try {
+    //   // Check if the file exists
+    //   let existingMessages: GroupMeMessage[] = [];
+    //   if (fs.existsSync(FILTERED_MESSAGES_FILE)) {
+    //     const fileContent = fs.readFileSync(FILTERED_MESSAGES_FILE, "utf8");
+    //     try {
+    //       existingMessages = JSON.parse(fileContent);
+    //     } catch (parseError) {
+    //       console.error(
+    //         "Error parsing existing filtered messages:",
+    //         parseError
+    //       );
+    //       // Handle the error, e.g., start with an empty array or throw an error.
+    //       // For now, we'll just log and continue with an empty array.
+    //     }
+    //   }
+
+    //   // Append the new filtered messages to the existing ones
+    //   const allFilteredMessages = existingMessages.concat(mostLiked);
+
+    //   fs.writeFileSync(
+    //     FILTERED_MESSAGES_FILE,
+    //     JSON.stringify(allFilteredMessages, null, 2) // Pretty print JSON
+    //   );
+    //   console.log(
+    //     `Appended ${mostLiked.length} filtered messages to ${FILTERED_MESSAGES_FILE}`
+    //   );
+    // } catch (error) {
+    //   console.error("Error writing filtered messages:", error);
+    //   // Handle error.  Consider if this is critical or not.
+    // }
+    getStoredLeaderboard(req, res);
+    // res.json({ messages: mostLiked });
   } catch (error: any) {
     console.error("Error fetching all-time leaderboard:", error);
     res.status(500).json({
@@ -138,10 +178,32 @@ async function addPhrase(req: Request, res: Response) {
   }
 }
 
-interface Phrase {
-  // Define an interface for your data (Recommended)
-  phrase: string;
-}
+// Example of retrieving the stored messages in a new endpoint
+const getStoredLeaderboard = async (req: Request, res: Response) => {
+  try {
+    if (fs.existsSync(FILTERED_MESSAGES_FILE)) {
+      const data = fs.readFileSync(FILTERED_MESSAGES_FILE, "utf8");
+      const mostLiked: GroupMeMessage[] = JSON.parse(data);
+      mostLiked.sort(
+        (a, b) => (b.favorited_by?.length || 0) - (a.favorited_by?.length || 0)
+      );
+      res.json({ messages: mostLiked });
+    } else {
+      res.status(404).json({ error: "No stored leaderboard data found." });
+    }
+  } catch (error: any) {
+    console.error("Error reading stored leaderboard:", error);
+    res.status(500).json({
+      error: "Failed to retrieve stored leaderboard data.",
+      details: error.message,
+    });
+  }
+};
+
+// interface Phrase {
+//   // Define an interface for your data (Recommended)
+//   phrase: string;
+// }
 
 // async function getPhrases(req: Request, res: Response) {
 //   try {

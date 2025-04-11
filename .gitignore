@@ -1,7 +1,7 @@
 node_modules
 package-lock.json
 npm-debug.log
-*.txt
+beeMovie.txt
 .env
 ron-bot-4*
 dist/*
