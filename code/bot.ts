@@ -9,7 +9,7 @@ import cool from "cool-ascii-faces";
 import { accessSecret } from "./secrets"; // No file extension needed for .js modules.
 require("dotenv").config();
 import { phrases, handlePhrase } from "./phrases";
-import { db } from "./index";
+import { db, FILTERED_MESSAGES_FILE } from "./index";
 import * as fs from "fs";
 
 let uses = new Map<string, number>();
@@ -85,36 +85,20 @@ async function respond(req: Request, res: Response) {
     const requestText = request.text;
     const AI_regex = /@bot/i;
     const img_regex = /@img/i;
+    const top_regex = /@top/i;
+    if (ai == undefined) {
+      await initialize();
+    }
     if (request?.name != "RoN Bot" && AI_regex.test(requestText)) {
-      if (ai == undefined) {
-        await initialize();
-      }
-
       const contents: any[] = [];
-      try {
-        if (request.attachments.length > 0) {
-          const fetchModule = await import("node-fetch");
-          const fetch = fetchModule.default; // Access the default export
-
-          const imgResponse = await fetch(request.attachments[0].url);
-
-          if (!imgResponse.ok) {
-            throw new Error(
-              `Failed to fetch image: ${imgResponse.status} ${imgResponse.statusText}`
-            );
-          }
-
-          const buffer = await imgResponse.buffer();
-          const base64Image: string = buffer.toString("base64");
-          contents.push({
-            inlineData: {
-              mimeType: "image/png",
-              data: base64Image,
-            },
-          });
-        }
-      } catch (error) {
-        console.log("attachment oopsie: " + error);
+      let base64: string = await attachmentToBase64Image(request);
+      if (base64 != "") {
+        contents.push({
+          inlineData: {
+            mimeType: "image/png",
+            data: base64,
+          },
+        });
       }
       const result = await generateBotResponse(
         request.name,
@@ -127,32 +111,15 @@ async function respond(req: Request, res: Response) {
       res.end(JSON.stringify(message));
       return;
     } else if (img_regex.test(requestText)) {
-      if (ai == undefined) {
-        await initialize();
-      }
       let newResponse: GenerateContentResponse | undefined;
       const contents: any[] = [{ text: requestText.replaceAll("@img", "") }];
-      let imgTxt = "";
-      let bodyAttachments = [];
       try {
-        if (request.attachments.length > 0) {
-          const fetchModule = await import("node-fetch");
-          const fetch = fetchModule.default; // Access the default export
-
-          const imgResponse = await fetch(request.attachments[0].url);
-
-          if (!imgResponse.ok) {
-            throw new Error(
-              `Failed to fetch image: ${imgResponse.status} ${imgResponse.statusText}`
-            );
-          }
-
-          const buffer = await imgResponse.buffer();
-          const base64Image: string = buffer.toString("base64");
+        let base64: string = await attachmentToBase64Image(request);
+        if (base64 != "") {
           contents.push({
             inlineData: {
               mimeType: "image/png",
-              data: base64Image,
+              data: base64,
             },
           });
         }
@@ -167,35 +134,77 @@ async function respond(req: Request, res: Response) {
         });
       } catch (error: any) {
         console.log("img oopsie: " + error);
-        imgTxt = "AI image went boom boom";
+        res.writeHead(200);
+        let message: PostBody = await postMessage(
+          "AI image went boom boom",
+          request,
+          []
+        );
+        res.end(JSON.stringify(message));
+        return;
       }
-      if (newResponse?.candidates?.[0]?.content?.parts) {
-        for (const part of newResponse.candidates[0].content.parts) {
-          // Based on the part type, either show the text or save the image
-          if (part.text) {
-            imgTxt = part.text;
-          } else if (part.inlineData && part.inlineData.data) {
-            const imageData = part.inlineData.data;
-            const buffer = Buffer.from(imageData, "base64");
-            const responseImg = await uploadImage(buffer);
-            const parsedResponse = JSON.parse(responseImg);
-            if (parsedResponse.payload && parsedResponse.payload.url) {
-              let newAttach = {
-                type: "image",
-                url: parsedResponse.payload.url,
-              };
-              bodyAttachments.push(newAttach);
-            }
-          }
-        }
+      handleAIAndPost(newResponse, res, request);
+      return;
+    } else if (top_regex.test(requestText)) {
+      if (!fs.existsSync(FILTERED_MESSAGES_FILE)) {
+        console.log("Oops no top file: " + request.text);
+        res.writeHead(200);
+        res.end();
+        return;
       }
 
-      res.writeHead(200);
-      message = await postMessage(imgTxt, request, bodyAttachments);
-      res.end(JSON.stringify(message));
+      const data = fs.readFileSync(FILTERED_MESSAGES_FILE, "utf8");
+      const mostLiked: GroupMeMessage[] = JSON.parse(data);
+      const context = mostLiked
+        .map(
+          (value: GroupMeMessage) =>
+            `${value.name}: ${value.text}\t(Like count: ${value.favorited_by.length})`
+        )
+        .join("\n");
+
+      let newResponse: GenerateContentResponse | undefined;
+      let contents: any[] = [];
+      contents.push({
+        text: `Previous conversation:\n${context}\nCurrent prompt:${
+          request.name
+        }:  ${requestText.replaceAll("@top", "")}`,
+      });
+      try {
+        let base64: string = await attachmentToBase64Image(request);
+        if (base64 != "") {
+          contents.push({
+            inlineData: {
+              mimeType: "image/png",
+              data: base64,
+            },
+          });
+        }
+
+        // Prepare the content parts
+        newResponse = await ai.models.generateContent({
+          model: modelName,
+          config: {
+            responseModalities: ["Text"],
+            systemInstruction: `Each prompt will have a history in the cache, use the history when answering.
+          The messages will have the number of likes that it received at the end. Messages with more likes are better.
+          You can be offensive.`,
+          },
+          contents: contents,
+        });
+      } catch (error: any) {
+        console.log("@top oopsie: " + error);
+        res.writeHead(200);
+        let message: PostBody = await postMessage(
+          "AI top went boom boom",
+          request,
+          []
+        );
+        res.end(JSON.stringify(message));
+        return;
+      }
+      handleAIAndPost(newResponse, res, request);
       return;
     } else if (request?.name != "RoN Bot" && botRegex.test(requestText)) {
-      // && getRandomInt(2) == 1
       res.writeHead(200);
       let matches = regexpmatcharrayToStringArray(requestText.match(regex));
       let botResponse = "";
@@ -372,7 +381,6 @@ async function generateBotResponse(
         if (part.text) {
           botString = part.text;
         } else if (part.inlineData && part.inlineData.data) {
-          console.log("ther eis an image");
           const imageData = part.inlineData.data;
           const buffer = Buffer.from(imageData, "base64");
           const responseImg = await uploadImage(buffer);
@@ -715,6 +723,62 @@ export function filterAndSortMostLikedMessages(
     (a, b) => (b.favorited_by?.length || 0) - (a.favorited_by?.length || 0)
   );
   return filtered;
+}
+
+async function handleAIAndPost(
+  newResponse: GenerateContentResponse | undefined,
+  res: Response<any, Record<string, any>>,
+  request: MessageBody
+) {
+  let botText: string = "";
+  let bodyAttachments: any[] = [];
+  if (newResponse?.candidates?.[0]?.content?.parts) {
+    for (const part of newResponse.candidates[0].content.parts) {
+      // Based on the part type, either show the text or save the image
+      if (part.text) {
+        botText = part.text;
+      } else if (part.inlineData && part.inlineData.data) {
+        const imageData = part.inlineData.data;
+        const buffer = Buffer.from(imageData, "base64");
+        const responseImg = await uploadImage(buffer);
+        const parsedResponse = JSON.parse(responseImg);
+        if (parsedResponse.payload && parsedResponse.payload.url) {
+          let newAttach = {
+            type: "image",
+            url: parsedResponse.payload.url,
+          };
+          bodyAttachments.push(newAttach);
+        }
+      }
+    }
+  }
+
+  res.writeHead(200);
+  let message: PostBody = await postMessage(botText, request, bodyAttachments);
+  res.end(JSON.stringify(message));
+}
+
+async function attachmentToBase64Image(request: MessageBody) {
+  try {
+    if (request.attachments.length > 0) {
+      const fetchModule = await import("node-fetch");
+      const fetch = fetchModule.default; // Access the default export
+
+      const imgResponse = await fetch(request.attachments[0].url);
+
+      if (!imgResponse.ok) {
+        throw new Error(
+          `Failed to fetch image: ${imgResponse.status} ${imgResponse.statusText}`
+        );
+      }
+
+      const buffer = await imgResponse.buffer();
+      return buffer.toString("base64");
+    }
+  } catch (error) {
+    console.log("attachment oopsie: " + error);
+  }
+  return "";
 }
 
 exports.respond = respond;

@@ -75,7 +75,7 @@ app.get("/api/leaderboard", async (req: Request, res: Response) => {
   }
 });
 
-const FILTERED_MESSAGES_FILE = "most_liked_messages.json"; // File to store most liked messages
+export const FILTERED_MESSAGES_FILE = "most_liked_messages.json"; // File to store most liked messages
 app.get("/api/allTimeLeaderboard", async (req: Request, res: Response) => {
   log("allTimeLeaderboard");
   const groupId = process.env.GROUP_ID;
