@@ -758,6 +758,62 @@ async function handleAIAndPost(
   res.end(JSON.stringify(message));
 }
 
+const stubRequest: MessageBody = {
+  attachments: [],
+  avatar_url: "",
+  created_at: 0,
+  group_id: "",
+  id: "",
+  name: "Test User",
+  sender_id: "",
+  sender_type: "",
+  source_guid: "",
+  system: false,
+  text: "",
+  user_id: "",
+};
+
+export async function fetchSportsNews(req: Request, res: Response) {
+  if (ai == undefined) {
+    await initialize();
+  }
+  const teams = ["NY Mets", "NY Yankees", "SF Giants", "NY Giants"]; // Define teams
+  console.log("Fetching sports news for:", teams.join(", "));
+
+  let newResponse: GenerateContentResponse | undefined;
+  let contents: any[] = [];
+  contents.push({
+    text: `As a sports anouncer, give me a brief daily sports news update (including their current wins and losses) for these teams: [${teams.join(
+      ", "
+    )}]`,
+  });
+  try {
+    // Prepare the content parts
+    newResponse = await ai.models.generateContent({
+      model: modelName,
+      config: {
+        responseModalities: ["Text"],
+        //   systemInstruction: `Each prompt will have a history in the cache, use the history when answering.
+        // The messages will have the number of likes that it received at the end. Messages with more likes are better.
+        // You can be offensive.`,
+      },
+      contents: contents,
+    });
+  } catch (error: any) {
+    console.log("Sports news oopsie: " + error);
+    res.writeHead(200);
+    let message: PostBody = await postMessage(
+      "AI top went boom boom",
+      stubRequest,
+      []
+    );
+  }
+
+  console.log("Attempting to post sports news summary...");
+  // Call postMessage directly from here
+  await handleAIAndPost(newResponse, res, stubRequest);
+}
+
 async function attachmentToBase64Image(request: MessageBody) {
   try {
     if (request.attachments.length > 0) {

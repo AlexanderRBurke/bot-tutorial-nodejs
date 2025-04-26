@@ -4,7 +4,7 @@ import * as admin from "firebase-admin";
 const bot = require("./bot"); // Import your bot logic
 import { phrases, handlePhrase } from "./phrases"; // Import your phrases
 import { log } from "console";
-import { GroupMeMessage } from "./bot";
+import { GroupMeMessage, fetchSportsNews, fetchLeaderboardData } from "./bot";
 import * as fs from "fs";
 
 const app = express(); // Create an Express app
@@ -22,7 +22,7 @@ app.get("/api/leaderboard", async (req: Request, res: Response) => {
       ? req.query.period
       : "week";
   try {
-    const leaderboardResponse = await bot.fetchLeaderboardData(period);
+    const leaderboardResponse = await fetchLeaderboardData(period);
 
     if (leaderboardResponse && leaderboardResponse.messages) {
       // Filter messages server-side
@@ -136,6 +136,25 @@ app.get("/api/allTimeLeaderboard", async (req: Request, res: Response) => {
     res.status(500).json({
       error: "Failed to fetch all-time leaderboard data.",
       details: error.message,
+    });
+  }
+});
+
+app.post("/api/sports-news", async (req: Request, res: Response) => {
+  log("Received request for /api/sports-news");
+
+  try {
+    // 1. Fetch news AND post it via the modified fetchSportsNews function
+    const postResult = await fetchSportsNews(req, res);
+    // res.json({ messages: postResult });
+  } catch (error: any) {
+    // Catch errors from the fetchSportsNews promise itself (e.g., network error *before* postMessage is called, or if postMessage rejects unexpectedly)
+    console.error("Error in /api/sports-news endpoint:", error);
+    const status = error?.status || 500; // Check if error has status
+    const details = error?.error || error.message || "Unknown server error"; // Check if error has details
+    res.status(status).json({
+      error: "Failed to process sports news request.",
+      details: details,
     });
   }
 });

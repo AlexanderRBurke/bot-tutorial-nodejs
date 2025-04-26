@@ -89,6 +89,15 @@
         display: block;
         margin-top: 5px;
       }
+      /* Style for the sports news button */
+      #sportsNewsButton {
+        margin-top: 15px; /* Add some space above the button */
+      }
+      /* Style for the status message area */
+      #statusMessage {
+        margin-top: 10px;
+        font-weight: bold;
+      }
     </style>
   </head>
   <body>
@@ -126,6 +135,12 @@
       <div id="botResponse"></div>
       <div id="imageDiv"></div>
       <div id="mapDiv" style="height: 400px; width: 600px"></div>
+      <hr style="margin-top: 20px" />
+      <!-- Optional separator -->
+      <h2>Post Sports News</h2>
+      <button id="sportsNewsButton">Post Today's Sports News to GroupMe</button>
+      <div id="statusMessage"></div>
+      <!-- To display success/error -->
     </div>
 
     <div id="Leaderboard" class="tabcontent">
@@ -174,11 +189,12 @@
         }
       }
 
-      // --- Bot Tester Logic (from original file) ---
+      // --- Bot Tester Logic ---
       const form = document.getElementById("messageForm");
       const responseDiv = document.getElementById("botResponse");
       const imageDiv = document.getElementById("imageDiv");
       const mapDiv = document.getElementById("mapDiv");
+      const statusMessageDiv = document.getElementById("statusMessage"); // Get status div
 
       form.addEventListener("submit", (e) => {
         e.preventDefault();
@@ -237,7 +253,7 @@
             // mapDiv.innerHTML = ''; // This might break Leaflet if map instance isn't removed properly
 
             if (parsedData.attachments && parsedData.attachments.length > 0) {
-              var attachment = parsedData.attachments[0]; // Process first attachment
+              var attachment = parsedData.attachments[0];
               var type = attachment?.type;
 
               if (type == "location" && attachment.lat && attachment.lng) {
@@ -280,6 +296,48 @@
               "Error communicating with bot: " + error.message;
           });
       });
+
+      // --- <<< NEW: Sports News Button Logic >>> ---
+      const sportsNewsButton = document.getElementById("sportsNewsButton");
+
+      sportsNewsButton.addEventListener("click", async () => {
+        statusMessageDiv.textContent = "Requesting sports news post..."; // Update status
+        statusMessageDiv.style.color = "orange"; // Indicate processing
+        // Clear previous bot test results
+        responseDiv.textContent = "";
+        imageDiv.innerHTML = "";
+        // mapDiv.innerHTML = ''; // Consider proper map clearing
+
+        try {
+          const response = await fetch("/api/sports-news", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json", // Although body is empty, good practice
+            },
+            // No body needed for this specific request based on backend setup
+          });
+
+          const result = await response.json(); // Expecting JSON response { message: "..." } or { error: "...", details: "..." }
+          console.log("Spresulte:", result);
+
+          if (!response.ok) {
+            // Handle HTTP errors (4xx, 5xx)
+            throw new Error(result.error || `HTTP error ${response.status}`);
+          }
+
+          // Display success message
+          statusMessageDiv.textContent =
+            result.text ||
+            "Request sent, but no confirmation message received.";
+          statusMessageDiv.style.color = "green"; // Indicate success
+        } catch (error) {
+          console.error("Error posting sports news:", error);
+          // Display error message
+          statusMessageDiv.textContent = `Error: ${error.message}`;
+          statusMessageDiv.style.color = "red"; // Indicate error
+        }
+      });
+      // --- <<< END NEW SPORTS NEWS LOGIC >>> ---
 
       // --- Leaderboard Fetch Logic ---
       const leaderboardDiv = document.getElementById("leaderboardContent");
@@ -327,8 +385,7 @@
                 .replace(/</g, "&lt;")
                 .replace(/>/g, "&gt;");
               const likeCount = message.favorited_by?.length || 0;
-
-              let imageHtml = ""; // Variable to hold the image tag HTML
+              let imageHtml = "";
               if (message.imageUrl) {
                 // Check if the message object has an imageUrl
                 // Basic HTML escaping for the URL attribute just in case
@@ -337,11 +394,11 @@
               }
 
               htmlContent += `
-                                        <li>
-                                                <strong>${userName}</strong> (${likeCount} likes):
-                                                <span>${safeText || ""}</span>
-                                                ${imageHtml}
-                                        </li>`;
+                                <li>
+                                    <strong>${userName}</strong> (${likeCount} likes):
+                                    <span>${safeText || ""}</span>
+                                    ${imageHtml}
+                                </li>`;
             });
             htmlContent += "</ol>";
             leaderboardDiv.innerHTML = htmlContent;
@@ -382,7 +439,7 @@
           const data = await response.json();
 
           if (data && data.messages) {
-            displayAllTimeLeaderboard(data.messages);
+            displayAllTimeLeaderboard(data.messages); // Pass fetched messages
           } else {
             allTimeLeaderboardDiv.innerHTML =
               "<p>Could not retrieve all-time leaderboard data.</p>";
