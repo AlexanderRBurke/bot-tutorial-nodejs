@@ -11,20 +11,37 @@ require("dotenv").config();
 import { phrases, handlePhrase } from "./phrases";
 import { db, FILTERED_MESSAGES_FILE } from "./index";
 import * as fs from "fs";
+import {
+  GenerateContentRequest,
+  GenerativeModel,
+  VertexAI,
+} from "@google-cloud/vertexai";
 
 let uses = new Map<string, number>();
 let currentDay: number = new Date().getDay();
 let botID: string; // Declare botID outside the async function
 let ai: GoogleGenAI;
-const modelName = "gemini-2.0-flash";
+
+let vertexAI: VertexAI;
+let generativeModel: GenerativeModel;
+let imageModel: GenerativeModel;
+const modelName = "gemini-2.5-pro-exp-03-25";
 
 async function initialize() {
   // Initialize everything that needs await
   try {
     const aiApiKey = await accessSecret("ai-api-key");
-
     ai = new GoogleGenAI({ apiKey: aiApiKey });
-
+    vertexAI = new VertexAI({
+      project: process.env.GCP_PROJECT_ID || "",
+      location: "us-central1",
+    });
+    generativeModel = vertexAI.getGenerativeModel({
+      model: modelName,
+    });
+    imageModel = vertexAI.getGenerativeModel({
+      model: "gemini-2.0-flash-exp-image-generation",
+    });
     botID = await accessSecret("bot-id"); // Assign the result to botID
 
     return;
@@ -86,7 +103,7 @@ async function respond(req: Request, res: Response) {
     const AI_regex = /@bot/i;
     const img_regex = /@img/i;
     const top_regex = /@top/i;
-    if (ai == undefined) {
+    if (generativeModel == undefined || imageModel == undefined) {
       await initialize();
     }
     if (request?.name != "RoN Bot" && AI_regex.test(requestText)) {
@@ -100,18 +117,26 @@ async function respond(req: Request, res: Response) {
           },
         });
       }
+      let botPrompt = requestText.replaceAll("@bot", "");
       const result = await generateBotResponse(
         request.name,
-        requestText.replaceAll("@bot", ""),
+        botPrompt,
         contents
       );
-      res.writeHead(200);
-      message = await postMessage(result.text, request, result.attachments);
+      try {
+        if (result.text != "sorry AI failed") {
+          await savePrompt(request.name, botPrompt, result.text); // Save to the database
+        }
+      } finally {
+        // Always send a response, even if saving the prompt fails
+        res.writeHead(200);
+        message = await postMessage(result.text, request, result.attachments);
+        res.end(JSON.stringify(message));
+      }
 
-      res.end(JSON.stringify(message));
       return;
     } else if (img_regex.test(requestText)) {
-      let newResponse: GenerateContentResponse | undefined;
+      let newResponse;
       const contents: any[] = [{ text: requestText.replaceAll("@img", "") }];
       try {
         let base64: string = await attachmentToBase64Image(request);
@@ -145,6 +170,32 @@ async function respond(req: Request, res: Response) {
       }
       handleAIAndPost(newResponse, res, request);
       return;
+
+      //   const aiRequest: GenerateContentRequest = {
+      //     contents: [{ role: "user", parts: contents }],
+      //     generationConfig: { reques },
+      //   };
+      //   newResponse = (
+      //     await imageModel.generateContent({
+      //       config: {
+      //         responseModalities: ["Text", "Image"],
+      //       },
+      //       contents: contents,
+      //     })
+      //   ).response;
+      // } catch (error: any) {
+      //   console.log("img oopsie: " + error);
+      //   res.writeHead(200);
+      //   let message: PostBody = await postMessage(
+      //     "AI image went boom boom",
+      //     request,
+      //     []
+      //   );
+      //   res.end(JSON.stringify(message));
+      //   return;
+      // }
+      // handleAIAndPost(newResponse, res, request);
+      // return;
     } else if (top_regex.test(requestText)) {
       if (!fs.existsSync(FILTERED_MESSAGES_FILE)) {
         console.log("Oops no top file: " + request.text);
@@ -191,6 +242,23 @@ async function respond(req: Request, res: Response) {
           },
           contents: contents,
         });
+        // const botRequest = {
+        //   contents: [{ role: "user", parts: contents }],
+        //   systemInstruction: {
+        //     role: "system",
+        //     parts: [
+        //       {
+        //         text: `Each prompt will have a history in the cache, use the history when answering.
+        //   The messages will have the number of likes that it received at the end. Messages with more likes are better.
+        //   You can be offensive.`,
+        //       },
+        //     ],
+        //   },
+        // };
+        // let newResponse = (await generativeModel.generateContent(botRequest))
+        //   .response;
+        // handleAIAndPost(newResponse, res, request);
+        // return;
       } catch (error: any) {
         console.log("@top oopsie: " + error);
         res.writeHead(200);
@@ -362,19 +430,23 @@ async function generateBotResponse(
   });
 
   try {
-    const botResponse = // Call the model with the combined prompt
-      await ai.models.generateContent({
-        model: modelName,
-        config: {
-          responseModalities: ["Text"],
-          systemInstruction: `Each prompt will have a history in the cache, use the history when answering.
+    const request = {
+      contents: [{ role: "user", parts: contents }],
+      systemInstruction: {
+        role: "system",
+        parts: [
+          {
+            text: `Each prompt will have a history in the cache, use the history when answering.
           When the prompt is self referential, only use the messages by the user's name.
           You can be offensive.`,
-        },
-        contents: contents,
-      });
+          },
+        ],
+      },
+    };
+    const botResponse = (await generativeModel.generateContent(request))
+      .response;
     let botString = "";
-    let botAttachments = [];
+    let botAttachments: any[] = [];
     if (botResponse?.candidates?.[0]?.content?.parts) {
       for (const part of botResponse.candidates[0].content.parts) {
         // Based on the part type, either show the text or save the image
@@ -392,11 +464,12 @@ async function generateBotResponse(
             };
             botAttachments.push(newAttach);
           }
+          // console.log("Image data: " + imageData);
+          // botAttachments.push(imageData);
         }
       }
     }
 
-    await savePrompt(userId, userPrompt, botString); // Save to the database
     return { text: botString, attachments: botAttachments };
   } catch (error) {
     console.log("AI oopsie: " + error);
