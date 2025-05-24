@@ -25,7 +25,7 @@ let ai: GoogleGenAI;
 let vertexAI: VertexAI;
 let generativeModel: GenerativeModel;
 let imageModel: GenerativeModel;
-const modelName = "gemini-2.5-pro-preview-05-06";
+const modelName = "gemini-2.0-flash";
 
 async function initialize() {
   // Initialize everything that needs await
