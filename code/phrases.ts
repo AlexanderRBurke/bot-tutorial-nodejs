@@ -119,6 +119,7 @@ let oldPhrases = {
   101: "I am down, with a squad.",
   111: "Shave his belly with a rusty razor.",
   112: "Put him in the brig with the captain's daughter.",
+  117: "Rematch??",
   123: "저는 오늘 한국어 수업이 있어요.",
   144: "Have you fixed your little cock yet?",
   169: "",
